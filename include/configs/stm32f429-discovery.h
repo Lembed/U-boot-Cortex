@@ -253,8 +253,8 @@
 #define CONFIG_ZERO_BOOTDELAY_CHECK
 #define CONFIG_BOOTCOMMAND		"run envmboot"
 
-#define CONFIG_HOSTNAME	stm-disco
-#define CONFIG_BOOTARGS	"stm32_platform=stm-disco "\
+#define CONFIG_HOSTNAME	stm32f429-disco
+#define CONFIG_BOOTARGS	"stm32_platform=stm32f429-disco "\
 				"console=ttyS0,115200 panic=10"
 #define LOADADDR		"0xD0007FC0"
 

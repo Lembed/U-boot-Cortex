@@ -3,27 +3,11 @@
  *
  * (C) Copyright 2003 Josef Baumgartner <josef.baumgartner@telex.de>
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /* ---
- * Version: U-boot 1.0.0 - initial release for Sentec COBRA5272 board
+ * Version: U-Boot 1.0.0 - initial release for Sentec COBRA5272 board
  * Date: 2004-03-29
  * Author: Florian Schlote
  *
@@ -41,23 +25,11 @@
 #define _CONFIG_COBRA5272_H
 
 /* ---
- * Define processor
- * possible values for Sentec board: only Coldfire M5272 processor supported
- * (please do not change)
- * ---
- */
-
-#define CONFIG_MCF52x2			/* define processor family */
-#define CONFIG_M5272			/* define processor type */
-
-/* ---
  * Defines processor clock - important for correct timings concerning serial
  * interface etc.
- * CONFIG_SYS_HZ gives unit: 1000 -> 1 Hz ^= 1000 ms
  * ---
  */
 
-#define CONFIG_SYS_HZ			1000
 #define CONFIG_SYS_CLK			66000000
 #define CONFIG_SYS_SDRAM_SIZE		16		/* SDRAM size in MB */
 
@@ -81,7 +53,6 @@
 #define CONFIG_MCFUART
 #define CONFIG_SYS_UART_PORT		(0)
 #define CONFIG_BAUDRATE		19200
-#define CONFIG_SYS_BAUDRATE_TABLE { 9600 , 19200 , 38400 , 57600, 115200 }
 
 /* ---
  * set "#if 0" to "#if 1" if (Hardware)-WATCHDOG should be enabled & change
@@ -107,7 +78,7 @@
  *
  * Setting #if 0: u-boot will start from flash and relocate itself to RAM
  *
- * Please do not forget to modify the setting of TEXT_BASE
+ * Please do not forget to modify the setting of CONFIG_SYS_TEXT_BASE
  * in board/cobra5272/config.mk accordingly (#if 0: 0xffe00000; #if 1: 0x20000)
  *
  * ---
@@ -133,6 +104,9 @@
 #define CONFIG_ENV_IS_IN_FLASH	1
 #endif
 
+#define LDS_BOARD_TEXT \
+        . = DEFINED(env_offset) ? env_offset : .; \
+        common/env_embedded.o (.text);
 
 /*
  * BOOTP options
@@ -142,20 +116,11 @@
 #define CONFIG_BOOTP_GATEWAY
 #define CONFIG_BOOTP_HOSTNAME
 
-
 /*
  * Command line configuration.
  */
-#include <config_cmd_default.h>
-
-#define CONFIG_CMD_PING
-
-#undef CONFIG_CMD_LOADS
-#undef CONFIG_CMD_LOADB
-#undef CONFIG_CMD_MII
 
 #ifdef CONFIG_MCFFEC
-#	define CONFIG_NET_MULTI		1
 #	define CONFIG_MII		1
 #	define CONFIG_MII_INIT		1
 #	define CONFIG_SYS_DISCOVER_PHY
@@ -184,12 +149,6 @@
 
 /*AUTOBOOT settings - booting images automatically by u-boot after power on*/
 
-#define CONFIG_BOOTDELAY	5		/* used for autoboot, delay in
-seconds u-boot will wait before starting defined (auto-)boot command, setting
-to -1 disables delay, setting to 0 will too prevent access to u-boot command
-interface: u-boot then has to reflashed */
-
-
 /* The following settings will be contained in the environment block ; if you
 want to use a neutral environment all those settings can be manually set in
 u-boot: 'set' command */
@@ -204,13 +163,10 @@ considered during boot */
 
 /* User network settings */
 
-#define CONFIG_ETHADDR 00:00:00:00:00:09	/* default ethernet MAC addr. */
 #define CONFIG_IPADDR 192.168.100.2		/* default board IP address */
 #define CONFIG_SERVERIP 192.168.100.1	/* default tftp server IP address */
 
 #endif
-
-#define CONFIG_SYS_PROMPT		"COBRA > "	/* Layout of u-boot prompt*/
 
 #define CONFIG_SYS_LOAD_ADDR		0x20000		/*Defines default RAM address
 from which user programs will be started */
@@ -276,9 +232,8 @@ from which user programs will be started */
  * Definitions for initial stack pointer and data area (in internal SRAM)
  */
 #define CONFIG_SYS_INIT_RAM_ADDR	0x20000000
-#define CONFIG_SYS_INIT_RAM_END	0x1000	/* End of used area in internal SRAM	*/
-#define CONFIG_SYS_GBL_DATA_SIZE	64	/* size in bytes reserved for initial data */
-#define CONFIG_SYS_GBL_DATA_OFFSET	(CONFIG_SYS_INIT_RAM_END - CONFIG_SYS_GBL_DATA_SIZE)
+#define CONFIG_SYS_INIT_RAM_SIZE	0x1000	/* Size of used area in internal SRAM	*/
+#define CONFIG_SYS_GBL_DATA_OFFSET	(CONFIG_SYS_INIT_RAM_SIZE - GENERATED_GBL_DATA_SIZE)
 #define CONFIG_SYS_INIT_SP_OFFSET	CONFIG_SYS_GBL_DATA_OFFSET
 
 /*-----------------------------------------------------------------------
@@ -330,6 +285,19 @@ from which user programs will be started */
  * Cache Configuration
  */
 #define CONFIG_SYS_CACHELINE_SIZE	16
+
+#define ICACHE_STATUS			(CONFIG_SYS_INIT_RAM_ADDR + \
+					 CONFIG_SYS_INIT_RAM_SIZE - 8)
+#define DCACHE_STATUS			(CONFIG_SYS_INIT_RAM_ADDR + \
+					 CONFIG_SYS_INIT_RAM_SIZE - 4)
+#define CONFIG_SYS_ICACHE_INV		(CF_CACR_CINV | CF_CACR_INVI)
+#define CONFIG_SYS_CACHE_ACR0		(CONFIG_SYS_SDRAM_BASE | \
+					 CF_ADDRMASK(CONFIG_SYS_SDRAM_SIZE) | \
+					 CF_ACR_EN | CF_ACR_SM_ALL)
+#define CONFIG_SYS_CACHE_ICACR		(CF_CACR_CENB | CF_CACR_CINV | \
+					 CF_CACR_DISD | CF_CACR_INVI | \
+					 CF_CACR_CEIB | CF_CACR_DCM | \
+					 CF_CACR_EUSP)
 
 /*-----------------------------------------------------------------------
  * Memory bank definitions

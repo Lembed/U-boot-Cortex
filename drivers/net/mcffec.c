@@ -5,23 +5,7 @@
  * (C) Copyright 2007 Freescale Semiconductor, Inc.
  * TsiChung Liew (Tsi-Chung.Liew@freescale.com)
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -32,11 +16,8 @@
 #include <netdev.h>
 #include <miiphy.h>
 
-#include "fec.h"
-
-#ifdef CONFIG_M68K
+#include <asm/fec.h>
 #include <asm/immap.h>
-#endif
 
 #undef	ET_DEBUG
 #undef	MII_DEBUG
@@ -98,7 +79,6 @@ struct fec_info_s fec_info[] = {
 #endif
 };
 
-int fec_send(struct eth_device *dev, volatile void *packet, int length);
 int fec_recv(struct eth_device *dev);
 int fec_init(struct eth_device *dev, bd_t * bd);
 void fec_halt(struct eth_device *dev);
@@ -106,18 +86,15 @@ void fec_reset(struct eth_device *dev);
 
 void setFecDuplexSpeed(volatile fec_t * fecp, bd_t * bd, int dup_spd)
 {
-	/* Set maximum frame length */
-	fecp->rcr = FEC_RCR_MAX_FL(PKT_MAXBUF_SIZE) | FEC_RCR_MII_MODE;
-#ifndef CONFIG_MCFFEC_MII
-	fecp->rcr |= FEC_RCR_RMII_MODE;
-#endif
-
 	if ((dup_spd >> 16) == FULL) {
-		/* Full duplex mode */
+		/* Set maximum frame length */
+		fecp->rcr = FEC_RCR_MAX_FL(PKT_MAXBUF_SIZE) | FEC_RCR_MII_MODE |
+		    FEC_RCR_PROM | 0x100;
 		fecp->tcr = FEC_TCR_FDEN;
 	} else {
 		/* Half duplex mode */
-		fecp->rcr |= FEC_RCR_DRT;
+		fecp->rcr = FEC_RCR_MAX_FL(PKT_MAXBUF_SIZE) |
+		    FEC_RCR_MII_MODE | FEC_RCR_DRT;
 		fecp->tcr &= ~FEC_TCR_FDEN;
 	}
 
@@ -128,9 +105,7 @@ void setFecDuplexSpeed(volatile fec_t * fecp, bd_t * bd, int dup_spd)
 #ifdef MII_DEBUG
 		printf("100Mbps\n");
 #endif
-#ifdef CONFIG_M68K
 		bd->bi_ethspeed = 100;
-#endif
 	} else {
 #ifdef CONFIG_MCF5445x
 		fecp->rcr |= 0x200;	/* enabled 10T base */
@@ -138,26 +113,24 @@ void setFecDuplexSpeed(volatile fec_t * fecp, bd_t * bd, int dup_spd)
 #ifdef MII_DEBUG
 		printf("10Mbps\n");
 #endif
-#ifdef CONFIG_M68K
 		bd->bi_ethspeed = 10;
-#endif
 	}
 }
 
-int fec_send(struct eth_device *dev, volatile void *packet, int length)
+static int fec_send(struct eth_device *dev, void *packet, int length)
 {
 	struct fec_info_s *info = dev->priv;
 	volatile fec_t *fecp = (fec_t *) (info->iobase);
 	int j, rc;
 	u16 phyStatus;
 
-	miiphy_read(dev->name, info->phy_addr, PHY_BMSR, &phyStatus);
+	miiphy_read(dev->name, info->phy_addr, MII_BMSR, &phyStatus);
 
 	/* section 16.9.23.3
 	 * Wait for ready
 	 */
 	j = 0;
-	while ((info->txbd[info->txIdx].cbd_sc & htons(BD_ENET_TX_READY)) &&
+	while ((info->txbd[info->txIdx].cbd_sc & BD_ENET_TX_READY) &&
 	       (j < MCFFEC_TOUT_LOOP)) {
 		udelay(1);
 		j++;
@@ -166,9 +139,9 @@ int fec_send(struct eth_device *dev, volatile void *packet, int length)
 		printf("TX not ready\n");
 	}
 
-	info->txbd[info->txIdx].cbd_bufaddr = htonl((uint) packet);
-	info->txbd[info->txIdx].cbd_datlen = htons(length);
-	info->txbd[info->txIdx].cbd_sc |= htons(BD_ENET_TX_RDY_LST);
+	info->txbd[info->txIdx].cbd_bufaddr = (uint) packet;
+	info->txbd[info->txIdx].cbd_datlen = length;
+	info->txbd[info->txIdx].cbd_sc |= BD_ENET_TX_RDY_LST;
 
 	/* Activate transmit Buffer Descriptor polling */
 	fecp->tdar = 0x01000000;	/* Descriptor polling active    */
@@ -190,7 +163,7 @@ int fec_send(struct eth_device *dev, volatile void *packet, int length)
 #endif
 
 	j = 0;
-	while ((info->txbd[info->txIdx].cbd_sc & htons(BD_ENET_TX_READY)) &&
+	while ((info->txbd[info->txIdx].cbd_sc & BD_ENET_TX_READY) &&
 	       (j < MCFFEC_TOUT_LOOP)) {
 		udelay(1);
 		j++;
@@ -202,12 +175,12 @@ int fec_send(struct eth_device *dev, volatile void *packet, int length)
 #ifdef ET_DEBUG
 	printf("%s[%d] %s: cycles: %d    status: %x  retry cnt: %d\n",
 	       __FILE__, __LINE__, __FUNCTION__, j,
-	       htons(info->txbd[info->txIdx].cbd_sc),
-	       (htons(info->txbd[info->txIdx].cbd_sc) & 0x003C) >> 2);
+	       info->txbd[info->txIdx].cbd_sc,
+	       (info->txbd[info->txIdx].cbd_sc & 0x003C) >> 2);
 #endif
 
 	/* return only status bits */
-	rc = (info->txbd[info->txIdx].cbd_sc & htons(BD_ENET_TX_STATS));
+	rc = (info->txbd[info->txIdx].cbd_sc & BD_ENET_TX_STATS);
 	info->txIdx = (info->txIdx + 1) % TX_BUF_CNT;
 
 	return rc;
@@ -226,40 +199,41 @@ int fec_recv(struct eth_device *dev)
 		icache_invalid();
 #endif
 		/* section 16.9.23.2 */
-		if (info->rxbd[info->rxIdx].cbd_sc & htons(BD_ENET_RX_EMPTY)) {
+		if (info->rxbd[info->rxIdx].cbd_sc & BD_ENET_RX_EMPTY) {
 			length = -1;
 			break;	/* nothing received - leave for() loop */
 		}
 
-		length = ntohs(info->rxbd[info->rxIdx].cbd_datlen);
+		length = info->rxbd[info->rxIdx].cbd_datlen;
 
-		if (info->rxbd[info->rxIdx].cbd_sc & htons(0x003f)) {
+		if (info->rxbd[info->rxIdx].cbd_sc & 0x003f) {
 			printf("%s[%d] err: %x\n",
 			       __FUNCTION__, __LINE__,
-			       ntohs(info->rxbd[info->rxIdx].cbd_sc));
+			       info->rxbd[info->rxIdx].cbd_sc);
 #ifdef ET_DEBUG
 			printf("%s[%d] err: %x\n",
 			       __FUNCTION__, __LINE__,
-			       ntohs(info->rxbd[info->rxIdx].cbd_sc));
+			       info->rxbd[info->rxIdx].cbd_sc);
 #endif
 		} else {
 
 			length -= 4;
 			/* Pass the packet up to the protocol layers. */
-			NetReceive(NetRxPackets[info->rxIdx], length);
+			net_process_received_packet(net_rx_packets[info->rxIdx],
+						    length);
 
 			fecp->eir |= FEC_EIR_RXF;
 		}
 
 		/* Give the buffer back to the FEC. */
-		info->rxbd[info->rxIdx].cbd_datlen = htons(0);
+		info->rxbd[info->rxIdx].cbd_datlen = 0;
 
 		/* wrap around buffer index when necessary */
 		if (info->rxIdx == LAST_PKTBUFSRX) {
-			info->rxbd[PKTBUFSRX - 1].cbd_sc = htons(BD_ENET_RX_W_E);
+			info->rxbd[PKTBUFSRX - 1].cbd_sc = BD_ENET_RX_W_E;
 			info->rxIdx = 0;
 		} else {
-			info->rxbd[info->rxIdx].cbd_sc = htons(BD_ENET_RX_EMPTY);
+			info->rxbd[info->rxIdx].cbd_sc = BD_ENET_RX_EMPTY;
 			info->rxIdx++;
 		}
 
@@ -502,11 +476,11 @@ int fec_init(struct eth_device *dev, bd_t * bd)
 	 *     Empty, Wrap
 	 */
 	for (i = 0; i < PKTBUFSRX; i++) {
-		info->rxbd[i].cbd_sc = htons(BD_ENET_RX_EMPTY);
-		info->rxbd[i].cbd_datlen = htons(0);	/* Reset */
-		info->rxbd[i].cbd_bufaddr = htonl((uint) NetRxPackets[i]);
+		info->rxbd[i].cbd_sc = BD_ENET_RX_EMPTY;
+		info->rxbd[i].cbd_datlen = 0;	/* Reset */
+		info->rxbd[i].cbd_bufaddr = (uint) net_rx_packets[i];
 	}
-	info->rxbd[PKTBUFSRX - 1].cbd_sc |= htons(BD_ENET_RX_WRAP);
+	info->rxbd[PKTBUFSRX - 1].cbd_sc |= BD_ENET_RX_WRAP;
 
 	/*
 	 * Setup Ethernet Transmitter Buffer Descriptors (13.14.24.19)
@@ -514,11 +488,11 @@ int fec_init(struct eth_device *dev, bd_t * bd)
 	 *    Last, Tx CRC
 	 */
 	for (i = 0; i < TX_BUF_CNT; i++) {
-		info->txbd[i].cbd_sc = htons(BD_ENET_TX_LAST | BD_ENET_TX_TC);
-		info->txbd[i].cbd_datlen = htons(0);	/* Reset */
-		info->txbd[i].cbd_bufaddr = htonl((uint) (&info->txbuf[0]));
+		info->txbd[i].cbd_sc = BD_ENET_TX_LAST | BD_ENET_TX_TC;
+		info->txbd[i].cbd_datlen = 0;	/* Reset */
+		info->txbd[i].cbd_bufaddr = (uint) (&info->txbuf[0]);
 	}
-	info->txbd[TX_BUF_CNT - 1].cbd_sc |= htons(BD_ENET_TX_WRAP);
+	info->txbd[TX_BUF_CNT - 1].cbd_sc |= BD_ENET_TX_WRAP;
 
 	/* Set receive and transmit descriptor base */
 	fecp->erdsr = (unsigned int)(&info->rxbd[0]);
@@ -526,16 +500,6 @@ int fec_init(struct eth_device *dev, bd_t * bd)
 
 	/* Now enable the transmit and receive processing */
 	fecp->ecr |= FEC_ECR_ETHER_EN;
-
-	/*
-	 * A delay is required between we set RDSR and RDAR. If there is no such
-	 * delay, then the Ethernet module becomes unable to receive packets.
-	 *
-	 * In Freescale MQX and in Linux things just work because there is a lot
-	 * other initialization code between the RDAR and the RDSR register
-	 * are being set, so this other initialization code serves as a delay.
-	 */
-	udelay(10);
 
 	/* And last, try to fill Rx Buffer Descriptors */
 	fecp->rdar = 0x01000000;	/* Descriptor polling active    */
@@ -580,7 +544,7 @@ int mcffec_initialize(bd_t * bis)
 	u32 tmp = CONFIG_SYS_INIT_RAM_ADDR + 0x1000;
 #endif
 
-	for (i = 0; i < sizeof(fec_info) / sizeof(fec_info[0]); i++) {
+	for (i = 0; i < ARRAY_SIZE(fec_info); i++) {
 
 		dev =
 		    (struct eth_device *)memalign(CONFIG_SYS_CACHELINE_SIZE,
@@ -640,9 +604,7 @@ int mcffec_initialize(bd_t * bis)
 	fec_info[i - 1].next = &fec_info[0];
 
 	/* default speed */
-#ifdef CONFIG_M68K
 	bis->bi_ethspeed = 10;
-#endif
 
 	return 0;
 }

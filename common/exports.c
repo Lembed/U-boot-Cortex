@@ -1,9 +1,11 @@
 #include <common.h>
 #include <exports.h>
+#include <spi.h>
+#include <i2c.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
-static void dummy(void)
+__attribute__((unused)) static void dummy(void)
 {
 }
 
@@ -12,34 +14,17 @@ unsigned long get_version(void)
 	return XF_VERSION;
 }
 
-/* Reuse _exports.h with a little trickery to avoid bitrot */
-#define EXPORT_FUNC(sym) gd->jt[XF_##sym] = (void *)sym;
+#define EXPORT_FUNC(f, a, x, ...)  gd->jt->x = f;
 
-#if !defined(CONFIG_I386) && !defined(CONFIG_PPC)
-# define install_hdlr      dummy
-# define free_hdlr         dummy
-#else /* kludge for non-standard function naming */
-# define install_hdlr      irq_install_handler
-# define free_hdlr         irq_free_handler
-#endif
-#ifndef CONFIG_CMD_I2C
-# define i2c_write         dummy
-# define i2c_read          dummy
-#endif
-#ifndef CONFIG_CMD_SPI
-# define spi_init          dummy
-# define spi_setup_slave   dummy
-# define spi_free_slave    dummy
-# define spi_claim_bus     dummy
-# define spi_release_bus   dummy
-# define spi_xfer          dummy
-#endif
-#ifndef CONFIG_HAS_UID
-# define forceenv          dummy
+#ifndef CONFIG_PHY_AQUANTIA
+# define mdio_get_current_dev		dummy
+# define phy_find_by_mask		dummy
+# define mdio_phydev_for_ethname	dummy
+# define miiphy_set_current_dev		dummy
 #endif
 
 void jumptable_init(void)
 {
-	gd->jt = malloc(XF_MAX * sizeof(void *));
+	gd->jt = malloc(sizeof(struct jt_funcs));
 #include <_exports.h>
 }

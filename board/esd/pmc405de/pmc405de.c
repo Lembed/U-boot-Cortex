@@ -2,31 +2,16 @@
  * (C) Copyright 2009
  * Matthias Fuchs, esd gmbh germany, matthias.fuchs@esd.eu
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <console.h>
 #include <libfdt.h>
 #include <fdt_support.h>
 #include <asm/processor.h>
 #include <asm/io.h>
-#include <asm/gpio.h>
+#include <asm/ppc4xx-gpio.h>
 #include <asm/4xx_pci.h>
 #include <command.h>
 #include <malloc.h>
@@ -315,8 +300,8 @@ int pci_pre_init(struct pci_controller *hose)
 	return 1;
 }
 
-#if defined(CONFIG_OF_LIBFDT) && defined(CONFIG_OF_BOARD_SETUP)
-void ft_board_setup(void *blob, bd_t *bd)
+#ifdef CONFIG_OF_BOARD_SETUP
+int ft_board_setup(void *blob, bd_t *bd)
 {
 	int rc;
 
@@ -334,8 +319,10 @@ void ft_board_setup(void *blob, bd_t *bd)
 			       fdt_strerror(rc));
 		}
 	}
+
+	return 0;
 }
-#endif /* defined(CONFIG_OF_LIBFDT) && defined(CONFIG_OF_BOARD_SETUP) */
+#endif /* CONFIG_OF_BOARD_SETUP */
 
 #if defined(CONFIG_SYS_EEPROM_WREN)
 /* Input: <dev_addr>  I2C address of EEPROM device to enable.
@@ -374,7 +361,7 @@ int eeprom_write_enable(unsigned dev_addr, int state)
 	return state;
 }
 
-int do_eep_wren(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+int do_eep_wren(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 	int query = argc == 1;
 	int state = 0;
@@ -415,9 +402,8 @@ U_BOOT_CMD(eepwren, 2, 0, do_eep_wren,
 
 #if defined(CONFIG_PRAM)
 #include <environment.h>
-extern env_t *env_ptr;
 
-int do_painit(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+int do_painit(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 	u32 pram, nextbase, base;
 	char *v;
@@ -441,7 +427,7 @@ int do_painit(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	 */
 	param = base - (pram << 10);
 	printf("PARAM: @%08x\n", param);
-	debug("memsize=0x%08x, base=0x%08x\n", gd->bd->bi_memsize, base);
+	debug("memsize=0x%08x, base=0x%08x\n", (u32)gd->bd->bi_memsize, base);
 
 	/* clear entire PA ram */
 	memset((void*)param, 0, (pram << 10));
@@ -477,7 +463,7 @@ U_BOOT_CMD(
 );
 #endif /* CONFIG_PRAM */
 
-int do_selfreset(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+int do_selfreset(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 	struct ppc4xx_gpio *gpio0 = (struct ppc4xx_gpio *)GPIO_BASE;
 	setbits_be32(&gpio0->tcr, CONFIG_SYS_GPIO_SELFRST_N);
@@ -489,7 +475,7 @@ U_BOOT_CMD(
 	""
 );
 
-int do_resetout(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+int do_resetout(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 	struct pmc405de_cpld *cpld =
 		(struct pmc405de_cpld *)CONFIG_SYS_CPLD_BASE;

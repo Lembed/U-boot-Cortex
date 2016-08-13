@@ -1,23 +1,7 @@
 /*
  * (C) Copyright 2002 Scott McNutt <smcnutt@artesyncp.com>
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -33,11 +17,14 @@
 /* High Level Configuration Options */
 #define CONFIG_XPEDITE1000	1
 #define CONFIG_SYS_BOARD_NAME	"XPedite1000"
-#define CONFIG_4xx		1		/* ... PPC4xx family */
+#define CONFIG_SYS_FORM_PMC	1
 #define CONFIG_440		1
 #define CONFIG_440GX		1		/* 440 GX */
 #define CONFIG_BOARD_EARLY_INIT_F 1		/* Call board_pre_init	*/
 #define CONFIG_SYS_CLK_FREQ	33333333	/* external freq to pll */
+#define CONFIG_DISPLAY_BOARDINFO
+
+#define	CONFIG_SYS_TEXT_BASE	0xFFF80000
 
 /*
  * DDR config
@@ -52,9 +39,8 @@
  */
 #define CONFIG_SYS_SDRAM_BASE		0x00000000
 #define CONFIG_SYS_FLASH_BASE		0xff000000	/* start of FLASH */
-#define CONFIG_SYS_MONITOR_BASE		TEXT_BASE	/* start of monitor */
+#define CONFIG_SYS_MONITOR_BASE		CONFIG_SYS_TEXT_BASE	/* start of monitor */
 #define CONFIG_SYS_PCI_MEMBASE		0x80000000	/* mapped pci memory */
-#define CONFIG_SYS_PERIPHERAL_BASE	0xe0000000	/* internal peripherals */
 #define CONFIG_SYS_ISRAM_BASE		0xc0000000	/* internal SRAM */
 #define CONFIG_SYS_PCI_BASE		0xd0000000	/* internal PCI regs */
 #define CONFIG_SYS_NVRAM_BASE_ADDR	(CONFIG_SYS_PERIPHERAL_BASE + 0x08000000)
@@ -100,11 +86,9 @@ extern void out32(unsigned int, unsigned long);
 #define CONFIG_SYS_TEMP_STACK_OCM	1
 #define CONFIG_SYS_OCM_DATA_ADDR	CONFIG_SYS_ISRAM_BASE
 #define CONFIG_SYS_INIT_RAM_ADDR	CONFIG_SYS_ISRAM_BASE	/* Initial RAM address */
-#define CONFIG_SYS_INIT_RAM_END		0x2000	/* End of used area in RAM */
-#define CONFIG_SYS_GBL_DATA_SIZE	128	/* num bytes initial data */
-#define CONFIG_SYS_GBL_DATA_OFFSET	(CONFIG_SYS_INIT_RAM_END - CONFIG_SYS_GBL_DATA_SIZE)
-#define CONFIG_SYS_POST_WORD_ADDR	(CONFIG_SYS_GBL_DATA_OFFSET - 0x4)
-#define CONFIG_SYS_INIT_SP_OFFSET	CONFIG_SYS_POST_WORD_ADDR
+#define CONFIG_SYS_INIT_RAM_SIZE		0x2000	/* Size of used area in RAM */
+#define CONFIG_SYS_GBL_DATA_OFFSET	(CONFIG_SYS_INIT_RAM_SIZE - GENERATED_GBL_DATA_SIZE)
+#define CONFIG_SYS_INIT_SP_OFFSET	(CONFIG_SYS_GBL_DATA_OFFSET - 0x4)
 
 #define CONFIG_SYS_MONITOR_LEN	(512 * 1024)	/* Reserve 512 KB for Mon */
 #define CONFIG_SYS_MALLOC_LEN	(1024 * 1024)	/* Reserved for malloc */
@@ -112,17 +96,16 @@ extern void out32(unsigned int, unsigned long);
 /*
  * Serial Port
  */
+#define CONFIG_CONS_INDEX	1	/* Use UART0			*/
+#define CONFIG_SYS_NS16550_SERIAL
+#define CONFIG_SYS_NS16550_REG_SIZE	1
+#define CONFIG_SYS_NS16550_CLK		get_serial_clock()
+
 #define CONFIG_SYS_BAUDRATE_TABLE \
 	{300, 600, 1200, 2400, 4800, 9600, 19200, 38400}
 #define CONFIG_BAUDRATE			115200
 #define CONFIG_LOADS_ECHO		1	/* echo on for serial download */
 #define CONFIG_SYS_LOADS_BAUD_CHANGE	1	/* allow baudrate change */
-
-/*
- * Use the HUSH parser
- */
-#define CONFIG_SYS_HUSH_PARSER
-#define CONFIG_SYS_PROMPT_HUSH_PS2	"> "
 
 /*
  * NOR flash configuration
@@ -140,10 +123,11 @@ extern void out32(unsigned int, unsigned long);
 /*
  * I2C
  */
-#define CONFIG_HARD_I2C			1	/* I2C with hardware support */
-#define CONFIG_SYS_I2C_SPEED		400000	/* I2C speed and slave address */
-#define CONFIG_SYS_I2C_SLAVE		0x7f
-#define CONFIG_I2C_MULTI_BUS
+#define CONFIG_SYS_I2C
+#define CONFIG_SYS_I2C_PPC4XX
+#define CONFIG_SYS_I2C_PPC4XX_CH0
+#define CONFIG_SYS_I2C_PPC4XX_SPEED_0		400000
+#define CONFIG_SYS_I2C_PPC4XX_SLAVE_0		0x7f
 
 /* I2C EEPROM */
 #define CONFIG_SYS_I2C_EEPROM_ADDR		0x50
@@ -161,6 +145,7 @@ extern void out32(unsigned int, unsigned long);
  */
 /* General PCI */
 #define CONFIG_PCI				/* include pci support */
+#define CONFIG_PCI_INDIRECT_BRIDGE	/* indirect PCI bridge support */
 #define CONFIG_PCI_PNP				/* do pci plug-and-play */
 #define CONFIG_PCI_SCAN_SHOW			/* show pci devices on startup */
 #define CONFIG_SYS_PCI_TARGBASE	0x80000000	/* PCIaddr mapped to CONFIG_SYS_PCI_MEMBASE */
@@ -176,7 +161,6 @@ extern void out32(unsigned int, unsigned long);
  */
 #define CONFIG_PPC4xx_EMAC
 #define CONFIG_PHY_GIGE		1	/* Include GbE speed/duplex detection */
-#define CONFIG_NET_MULTI	1
 #define CONFIG_MII		1	/* MII PHY management */
 #define CONFIG_PHY_RESET	1	/* reset phy upon startup */
 #define CONFIG_SYS_RX_ETH_BUFFER 32	/* Number of ethernet rx buffers & descriptors */
@@ -196,41 +180,24 @@ extern void out32(unsigned int, unsigned long);
 /*
  * Command configuration
  */
-#include <config_cmd_default.h>
-
-#define CONFIG_CMD_ASKENV
 #define CONFIG_CMD_DATE
-#define CONFIG_CMD_DHCP
 #define CONFIG_CMD_EEPROM
-#define CONFIG_CMD_ELF
-#define CONFIG_CMD_FLASH
-#define CONFIG_CMD_I2C
 #define CONFIG_CMD_IRQ
 #define CONFIG_CMD_JFFS2
-#define CONFIG_CMD_MII
-#define CONFIG_CMD_NET
 #define CONFIG_CMD_PCI
-#define CONFIG_CMD_PING
-#define CONFIG_CMD_SAVEENV
-#define CONFIG_CMD_SNTP
 
 /*
  * Miscellaneous configurable options
  */
 #define CONFIG_SYS_LONGHELP			/* undef to save memory */
 #define CONFIG_SYS_LOAD_ADDR	0x100000	/* default load address */
-#define CONFIG_SYS_PROMPT	"=> "		/* Monitor Command Prompt */
 #define CONFIG_SYS_CBSIZE	256		/* Console I/O Buffer Size */
 #define CONFIG_SYS_PBSIZE (CONFIG_SYS_CBSIZE+sizeof(CONFIG_SYS_PROMPT)+16) /* Print Buffer Size */
 #define CONFIG_SYS_MAXARGS	16		/* max number of command args */
 #define CONFIG_SYS_BARGSIZE	CONFIG_SYS_CBSIZE	/* Boot Argument Buffer Size */
-#define CONFIG_SYS_HZ		1000		/* decrementer freq: 1 ms ticks */
 #define CONFIG_CMDLINE_EDITING	1		/* Command-line editing */
-#define CONFIG_BOOTDELAY	3		/* -1 disables auto-boot */
 #define CONFIG_PANIC_HANG			/* do not reset board on panic */
 #define CONFIG_PREBOOT				/* enable preboot variable */
-#define CONFIG_FIT		1
-#define CONFIG_FIT_VERBOSE	1
 #define CONFIG_INTEGRITY			/* support booting INTEGRITY OS */
 #define CONFIG_SYS_EXTBDINFO	1		/* To use extended board_into (bd_t) */
 
@@ -240,12 +207,6 @@ extern void out32(unsigned int, unsigned long);
  * the maximum mapped by the Linux kernel during initialization.
  */
 #define CONFIG_SYS_BOOTMAPSZ		(8 << 20)	/* Initial Memory map for Linux */
-
-/*
- * Boot Flags
- */
-#define BOOTFLAG_COLD	0x01		/* Normal Power-On: Boot from FLASH */
-#define BOOTFLAG_WARM	0x02		/* Software reboot */
 
 /*
  * Environment Configuration
@@ -264,9 +225,9 @@ extern void out32(unsigned int, unsigned long);
  * ff000000 - ffbfffff	OS Use/Filesystem (12MB)
  */
 
-#define CONFIG_UBOOT_ENV_ADDR	MK_STR(TEXT_BASE)
-#define CONFIG_FDT_ENV_ADDR	MK_STR(0xfff00000)
-#define CONFIG_OS_ENV_ADDR	MK_STR(0xffc00000)
+#define CONFIG_UBOOT_ENV_ADDR	__stringify(CONFIG_SYS_TEXT_BASE)
+#define CONFIG_FDT_ENV_ADDR	__stringify(0xfff00000)
+#define CONFIG_OS_ENV_ADDR	__stringify(0xffc00000)
 
 #define CONFIG_PROG_UBOOT						\
 	"$download_cmd $loadaddr $ubootfile; "				\
@@ -340,10 +301,10 @@ extern void out32(unsigned int, unsigned long);
 	"misc_args=ip=on\0"						\
 	"set_bootargs=setenv bootargs ${console_args} ${root_args} ${misc_args}\0" \
 	"bootfile=/home/user/file\0"					\
-	"osfile=/home/user/uImage-XPedite1000\0"			\
-	"fdtfile=/home/user/xpedite1000.dtb\0"				\
+	"osfile=/home/user/board.uImage\0"				\
+	"fdtfile=/home/user/board.dtb\0"				\
 	"ubootfile=/home/user/u-boot.bin\0"				\
-	"fdtaddr=c00000\0"						\
+	"fdtaddr=0x1e00000\0"						\
 	"osaddr=0x1000000\0"						\
 	"loadaddr=0x1000000\0"						\
 	"prog_uboot="CONFIG_PROG_UBOOT"\0"				\

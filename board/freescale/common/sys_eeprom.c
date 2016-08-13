@@ -1,26 +1,10 @@
 /*
- * Copyright 2006, 2008-2009 Freescale Semiconductor
+ * Copyright 2006, 2008-2009, 2011 Freescale Semiconductor
  * York Sun (yorksun@freescale.com)
  * Haiying Wang (haiying.wang@freescale.com)
  * Timur Tabi (timur@freescale.com)
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -28,13 +12,19 @@
 #include <i2c.h>
 #include <linux/ctype.h>
 
+#ifdef CONFIG_SYS_I2C_EEPROM_CCID
 #include "../common/eeprom.h"
-
-#if !defined(CONFIG_SYS_I2C_EEPROM_CCID) && !defined(CONFIG_SYS_I2C_EEPROM_NXID)
-#error "Please define either CONFIG_SYS_I2C_EEPROM_CCID or CONFIG_SYS_I2C_EEPROM_NXID"
+#define MAX_NUM_PORTS	8
 #endif
 
-#define MAX_NUM_PORTS	8	/* This value must be 8 as defined in doc */
+#ifdef CONFIG_SYS_I2C_EEPROM_NXID
+/* some boards with non-256-bytes EEPROM have special define */
+/* for MAX_NUM_PORTS in board-specific file */
+#ifndef MAX_NUM_PORTS
+#define MAX_NUM_PORTS	16
+#endif
+#define NXID_VERSION	1
+#endif
 
 /**
  * static eeprom: EEPROM layout for CCID or NXID formats
@@ -68,8 +58,9 @@ static struct __attribute__ ((__packed__)) eeprom {
 	u8 res_1[21];     /* 0x2b - 0x3f Reserved */
 	u8 mac_count;     /* 0x40        Number of MAC addresses */
 	u8 mac_flag;      /* 0x41        MAC table flags */
-	u8 mac[MAX_NUM_PORTS][6];     /* 0x42 - 0x71 MAC addresses */
-	u32 crc;          /* 0x72        CRC32 checksum */
+	u8 mac[MAX_NUM_PORTS][6];     /* 0x42 - 0xa1 MAC addresses */
+	u8 res_2[90];     /* 0xa2 - 0xfb Reserved */	
+	u32 crc;          /* 0xfc - 0xff CRC32 checksum */
 #endif
 } e;
 
@@ -99,7 +90,7 @@ static void show_eeprom(void)
 	/* EEPROM tag ID, either CCID or NXID */
 #ifdef CONFIG_SYS_I2C_EEPROM_NXID
 	printf("ID: %c%c%c%c v%u\n", e.id[0], e.id[1], e.id[2], e.id[3],
-		be32_to_cpu(e.version));
+	       be32_to_cpu(e.version));
 #else
 	printf("ID: %c%c%c%c\n", e.id[0], e.id[1], e.id[2], e.id[3]);
 #endif
@@ -123,7 +114,7 @@ static void show_eeprom(void)
 		e.date[3] & 0x80 ? "PM" : "");
 
 	/* Show MAC addresses  */
-	for (i = 0; i < min(e.mac_count, MAX_NUM_PORTS); i++) {
+	for (i = 0; i < min(e.mac_count, (u8)MAX_NUM_PORTS); i++) {
 
 		u8 *p = e.mac[i];
 
@@ -204,7 +195,7 @@ static void update_crc(void)
  */
 static int prog_eeprom(void)
 {
-	int ret = 0; /* shut up gcc */
+	int ret = 0;
 	int i;
 	void *p;
 #ifdef CONFIG_SYS_EEPROM_BUS_NUM
@@ -225,12 +216,27 @@ static int prog_eeprom(void)
 	i2c_set_bus_num(CONFIG_SYS_EEPROM_BUS_NUM);
 #endif
 
+	/*
+	 * The AT24C02 datasheet says that data can only be written in page
+	 * mode, which means 8 bytes at a time, and it takes up to 5ms to
+	 * complete a given write.
+	 */
 	for (i = 0, p = &e; i < sizeof(e); i += 8, p += 8) {
 		ret = i2c_write(CONFIG_SYS_I2C_EEPROM_ADDR, i, CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
-			p, min((sizeof(e) - i), 8));
+				p, min((int)(sizeof(e) - i), 8));
 		if (ret)
 			break;
 		udelay(5000);	/* 5ms write cycle timing */
+	}
+
+	if (!ret) {
+		/* Verify the write by reading back the EEPROM and comparing */
+		struct eeprom e2;
+
+		ret = i2c_read(CONFIG_SYS_I2C_EEPROM_ADDR, 0,
+			CONFIG_SYS_I2C_EEPROM_ADDR_LEN, (void *)&e2, sizeof(e2));
+		if (!ret && memcmp(&e, &e2, sizeof(e)))
+			ret = -1;
 	}
 
 #ifdef CONFIG_SYS_EEPROM_BUS_NUM
@@ -239,6 +245,7 @@ static int prog_eeprom(void)
 
 	if (ret) {
 		printf("Programming failed.\n");
+		has_been_read = 0;
 		return -1;
 	}
 
@@ -300,7 +307,7 @@ static void set_mac_address(unsigned int index, const char *string)
 	char *p = (char *) string;
 	unsigned int i;
 
-	if (!string) {
+	if ((index >= MAX_NUM_PORTS) || !string) {
 		printf("Usage: mac <n> XX:XX:XX:XX:XX:XX\n");
 		return;
 	}
@@ -314,7 +321,7 @@ static void set_mac_address(unsigned int index, const char *string)
 	update_crc();
 }
 
-int do_mac(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+int do_mac(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 	char cmd;
 
@@ -333,10 +340,11 @@ int do_mac(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	if (cmd == 'i') {
 #ifdef CONFIG_SYS_I2C_EEPROM_NXID
 		memcpy(e.id, "NXID", sizeof(e.id));
-		e.version = 0;
+		e.version = cpu_to_be32(NXID_VERSION);
 #else
 		memcpy(e.id, "CCID", sizeof(e.id));
 #endif
+		update_crc();
 		return 0;
 	}
 
@@ -351,8 +359,7 @@ int do_mac(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 			prog_eeprom();
 			break;
 		default:
-			cmd_usage(cmdtp);
-			break;
+			return cmd_usage(cmdtp);
 		}
 
 		return 0;
@@ -383,13 +390,12 @@ int do_mac(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		e.mac_count = simple_strtoul(argv[2], NULL, 16);
 		update_crc();
 		break;
-	case '0' ... '7':	/* "mac 0" through "mac 7" */
-		set_mac_address(cmd - '0', argv[2]);
+	case '0' ... '9':	/* "mac 0" through "mac 22" */
+		set_mac_address(simple_strtoul(argv[1], NULL, 10), argv[2]);
 		break;
 	case 'h':	/* help */
 	default:
-		cmd_usage(cmdtp);
-		break;
+		return cmd_usage(cmdtp);
 	}
 
 	return 0;
@@ -405,32 +411,57 @@ int do_mac(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
  * This ensures that any user-saved variables are never overwritten.
  *
  * This function must be called after relocation.
+ *
+ * For NXID v1 EEPROMs, we support loading and up-converting the older NXID v0
+ * format.  In a v0 EEPROM, there are only eight MAC addresses and the CRC is
+ * located at a different offset.
  */
 int mac_read_from_eeprom(void)
 {
 	unsigned int i;
-	u32 crc;
+	u32 crc, crc_offset = offsetof(struct eeprom, crc);
+	u32 *crcp; /* Pointer to the CRC in the data read from the EEPROM */
 
 	puts("EEPROM: ");
 
 	if (read_eeprom()) {
 		printf("Read failed.\n");
-		return -1;
+		return 0;
 	}
 
 	if (!is_valid) {
 		printf("Invalid ID (%02x %02x %02x %02x)\n",
 		       e.id[0], e.id[1], e.id[2], e.id[3]);
-		return -1;
+		return 0;
 	}
 
-	crc = crc32(0, (void *)&e, sizeof(e) - 4);
-	if (crc != be32_to_cpu(e.crc)) {
+#ifdef CONFIG_SYS_I2C_EEPROM_NXID
+	/*
+	 * If we've read an NXID v0 EEPROM, then we need to set the CRC offset
+	 * to where it is in v0.
+	 */
+	if (e.version == 0)
+		crc_offset = 0x72;
+#endif
+
+	crc = crc32(0, (void *)&e, crc_offset);
+	crcp = (void *)&e + crc_offset;
+	if (crc != be32_to_cpu(*crcp)) {
 		printf("CRC mismatch (%08x != %08x)\n", crc, be32_to_cpu(e.crc));
-		return -1;
+		return 0;
 	}
 
-	for (i = 0; i < min(e.mac_count, MAX_NUM_PORTS); i++) {
+#ifdef CONFIG_SYS_I2C_EEPROM_NXID
+	/*
+	 * MAC address #9 in v1 occupies the same position as the CRC in v0.
+	 * Erase it so that it's not mistaken for a MAC address.  We'll
+	 * update the CRC later.
+	 */
+	if (e.version == 0)
+		memset(e.mac[8], 0xff, 6);
+#endif
+
+	for (i = 0; i < min(e.mac_count, (u8)MAX_NUM_PORTS); i++) {
 		if (memcmp(&e.mac[i], "\0\0\0\0\0\0", 6) &&
 		    memcmp(&e.mac[i], "\xFF\xFF\xFF\xFF\xFF\xFF", 6)) {
 			char ethaddr[18];
@@ -454,9 +485,20 @@ int mac_read_from_eeprom(void)
 
 #ifdef CONFIG_SYS_I2C_EEPROM_NXID
 	printf("%c%c%c%c v%u\n", e.id[0], e.id[1], e.id[2], e.id[3],
-		be32_to_cpu(e.version));
+	       be32_to_cpu(e.version));
 #else
 	printf("%c%c%c%c\n", e.id[0], e.id[1], e.id[2], e.id[3]);
+#endif
+
+#ifdef CONFIG_SYS_I2C_EEPROM_NXID
+	/*
+	 * Now we need to upconvert the data into v1 format.  We do this last so
+	 * that at boot time, U-Boot will still say "NXID v0".
+	 */
+	if (e.version == 0) {
+		e.version = cpu_to_be32(NXID_VERSION);
+		update_crc();
+	}
 #endif
 
 	return 0;

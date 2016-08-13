@@ -42,6 +42,7 @@
 ****************************************************************************/
 
 #include <common.h>
+#include <linux/compiler.h>
 #include "x86emu/x86emui.h"
 
 /*----------------------------- Implementation ----------------------------*/
@@ -57,7 +58,7 @@ void x86emuOp2_illegal_op(
     u8 op2)
 {
     START_OF_INSTR();
-    DECODE_PRINTF("ILLEGAL EXTENDED X86 OPCODE\n");
+    ERR_PRINTF("ILLEGAL EXTENDED X86 OPCODE\n");
     TRACE_REGS();
     printk("%04x:%04x: %02X ILLEGAL EXTENDED X86 OPCODE!\n",
 	M.x86.R_CS, M.x86.R_IP-2,op2);
@@ -168,7 +169,7 @@ void x86emuOp2_set_byte(u8 op2)
     int mod, rl, rh;
     uint destoffset;
     u8	*destreg;
-    char *name = 0;
+    __maybe_unused char *name = 0;
     int cond = 0;
 
     START_OF_INSTR();
@@ -1088,7 +1089,7 @@ void x86emuOp2_btX_I(u8 X86EMU_UNUSED(op2))
 	DECODE_PRINTF("BTC\t");
 	break;
     default:
-	DECODE_PRINTF("ILLEGAL EXTENDED X86 OPCODE\n");
+	ERR_PRINTF("ILLEGAL EXTENDED X86 OPCODE\n");
 	TRACE_REGS();
 	printk("%04x:%04x: %02X%02X ILLEGAL EXTENDED X86 OPCODE EXTENSION!\n",
 		M.x86.R_CS, M.x86.R_IP-3,op2, (mod<<6)|(rh<<3)|rl);

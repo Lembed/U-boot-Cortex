@@ -2,23 +2,7 @@
  * (C) Copyright 2006
  * Markus Klotzbuecher, mk@denx.de
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -34,16 +18,6 @@
 #include <i2c.h>
 
 #if defined(CONFIG_CMD_DATE)
-
-/*---------------------------------------------------------------------*/
-#undef DEBUG_RTC
-
-#ifdef DEBUG_RTC
-#define DEBUGR(fmt,args...) printf(fmt ,##args)
-#else
-#define DEBUGR(fmt,args...)
-#endif
-/*---------------------------------------------------------------------*/
 
 /*
  * RTC register addresses
@@ -75,6 +49,8 @@
 #define RTC_STAT_BIT_A1F	0x1	/* Alarm 1 flag                 */
 #define RTC_STAT_BIT_A2F	0x2	/* Alarm 2 flag                 */
 #define RTC_STAT_BIT_OSF	0x80	/* Oscillator stop flag         */
+#define RTC_STAT_BIT_BB32KHZ	0x40	/* Battery backed 32KHz Output  */
+#define RTC_STAT_BIT_EN32KHZ	0x8	/* Enable 32KHz Output  */
 
 
 static uchar rtc_read (uchar reg);
@@ -99,7 +75,7 @@ int rtc_get (struct rtc_time *tmp)
 	mon_cent = rtc_read (RTC_MON_REG_ADDR);
 	year = rtc_read (RTC_YR_REG_ADDR);
 
-	DEBUGR ("Get RTC year: %02x mon/cent: %02x mday: %02x wday: %02x "
+	debug("Get RTC year: %02x mon/cent: %02x mday: %02x wday: %02x "
 		"hr: %02x min: %02x sec: %02x control: %02x status: %02x\n",
 		year, mon_cent, mday, wday, hour, min, sec, control, status);
 
@@ -121,7 +97,7 @@ int rtc_get (struct rtc_time *tmp)
 	tmp->tm_yday = 0;
 	tmp->tm_isdst= 0;
 
-	DEBUGR ("Get DATE: %4d-%02d-%02d (wday=%d)  TIME: %2d:%02d:%02d\n",
+	debug("Get DATE: %4d-%02d-%02d (wday=%d)  TIME: %2d:%02d:%02d\n",
 		tmp->tm_year, tmp->tm_mon, tmp->tm_mday, tmp->tm_wday,
 		tmp->tm_hour, tmp->tm_min, tmp->tm_sec);
 
@@ -136,7 +112,7 @@ int rtc_set (struct rtc_time *tmp)
 {
 	uchar century;
 
-	DEBUGR ("Set DATE: %4d-%02d-%02d (wday=%d)  TIME: %2d:%02d:%02d\n",
+	debug("Set DATE: %4d-%02d-%02d (wday=%d)  TIME: %2d:%02d:%02d\n",
 		tmp->tm_year, tmp->tm_mon, tmp->tm_mday, tmp->tm_wday,
 		tmp->tm_hour, tmp->tm_min, tmp->tm_sec);
 
@@ -167,6 +143,14 @@ void rtc_reset (void)
 	rtc_write (RTC_CTL_REG_ADDR, RTC_CTL_BIT_RS1 | RTC_CTL_BIT_RS2);
 }
 
+/*
+ * Enable 32KHz output
+ */
+void rtc_enable_32khz_output(void)
+{
+	rtc_write(RTC_STAT_REG_ADDR,
+		  RTC_STAT_BIT_BB32KHZ | RTC_STAT_BIT_EN32KHZ);
+}
 
 /*
  * Helper functions

@@ -1,5 +1,5 @@
 /*
- * U-boot - Configuration file for BF537 PNAV board
+ * U-Boot - Configuration file for BF537 PNAV board
  */
 
 #ifndef __CONFIG_BF537_PNAV_H__
@@ -7,13 +7,11 @@
 
 #include <asm/config-pre.h>
 
-
 /*
  * Processor Settings
  */
 #define CONFIG_BFIN_CPU             bf537-0.2
 #define CONFIG_BFIN_BOOT_MODE       BFIN_BOOT_SPI_MASTER
-
 
 /*
  * Clock Settings
@@ -38,7 +36,6 @@
 /* Values can range from 1-15						*/
 #define CONFIG_SCLK_DIV			4
 
-
 /*
  * Memory Settings
  */
@@ -52,9 +49,8 @@
 #define CONFIG_EBIU_AMBCTL0_VAL	0x7BB033B0
 #define CONFIG_EBIU_AMBCTL1_VAL	0xFFC27BB0
 
-#define CONFIG_SYS_MONITOR_LEN		(256 * 1024)
+#define CONFIG_SYS_MONITOR_LEN		(512 * 1024)
 #define CONFIG_SYS_MALLOC_LEN		(128 * 1024)
-
 
 /*
  * Network Settings
@@ -63,12 +59,8 @@
 #define ADI_CMDS_NETWORK	1
 #define CONFIG_BFIN_MAC
 #define CONFIG_RMII
-#define CONFIG_NET_MULTI	1
 #endif
 #define CONFIG_HOSTNAME		bf537-pnav
-/* Uncomment next line to use fixed MAC address */
-/* #define CONFIG_ETHADDR	02:80:ad:24:21:18 */
-
 
 /*
  * Flash Settings
@@ -79,16 +71,12 @@
 #define CONFIG_SYS_MAX_FLASH_BANKS	1
 #define CONFIG_SYS_MAX_FLASH_SECT	71
 
-
 /*
  * SPI Settings
  */
 #define CONFIG_BFIN_SPI
 #define CONFIG_ENV_SPI_MAX_HZ	30000000
 #define CONFIG_SF_DEFAULT_SPEED	30000000
-#define CONFIG_SPI_FLASH
-#define CONFIG_SPI_FLASH_STMICRO
-
 
 /*
  * Env Storage Settings
@@ -112,15 +100,11 @@
  * it linked after the configuration sector.
  */
 # define LDS_BOARD_TEXT \
-	cpu/blackfin/traps.o		(.text .text.*); \
-	cpu/blackfin/interrupt.o	(.text .text.*); \
-	cpu/blackfin/serial.o		(.text .text.*); \
-	common/dlmalloc.o		(.text .text.*); \
-	lib_generic/crc32.o		(.text .text.*); \
+	arch/blackfin/lib/built-in.o (.text*); \
+	arch/blackfin/cpu/built-in.o (.text*); \
 	. = DEFINED(env_offset) ? env_offset : .; \
-	common/env_embedded.o		(.text .text.*);
+	common/env_embedded.o (.text*);
 #endif
-
 
 /*
  * NAND Settings
@@ -132,7 +116,6 @@
 
 #define BFIN_NAND_CLE(chip) ((unsigned long)(chip)->IO_ADDR_W | (1 << 2))
 #define BFIN_NAND_ALE(chip) ((unsigned long)(chip)->IO_ADDR_W | (1 << 1))
-#define BFIN_NAND_READY     PF12
 #define BFIN_NAND_WRITE(addr, cmd) \
 	do { \
 		bfin_write8(addr, cmd); \
@@ -141,29 +124,18 @@
 
 #define NAND_PLAT_WRITE_CMD(chip, cmd) BFIN_NAND_WRITE(BFIN_NAND_CLE(chip), cmd)
 #define NAND_PLAT_WRITE_ADR(chip, cmd) BFIN_NAND_WRITE(BFIN_NAND_ALE(chip), cmd)
-#define NAND_PLAT_DEV_READY(chip)      (bfin_read_PORTHIO() & BFIN_NAND_READY)
-#define NAND_PLAT_INIT() \
-	do { \
-		bfin_write_PORTH_FER(bfin_read_PORTH_FER() & ~BFIN_NAND_READY); \
-		bfin_write_PORTHIO_DIR(bfin_read_PORTHIO_DIR() & ~BFIN_NAND_READY); \
-		bfin_write_PORTHIO_INEN(bfin_read_PORTHIO_INEN() | BFIN_NAND_READY); \
-	} while (0)
-
+#define NAND_PLAT_GPIO_DEV_READY       GPIO_PF12
 
 /*
  * I2C settings
  */
-#define CONFIG_BFIN_TWI_I2C	1
-#define CONFIG_HARD_I2C		1
-#define CONFIG_SYS_I2C_SPEED		50000
-#define CONFIG_SYS_I2C_SLAVE		0
-
+#define CONFIG_SYS_I2C
+#define CONFIG_SYS_I2C_ADI
 
 /*
  * Misc Settings
  */
 #define CONFIG_BAUDRATE		115200
-#define CONFIG_MISC_INIT_R
 #define CONFIG_RTC_BFIN
 #define CONFIG_UART_CONSOLE	0
 
@@ -175,7 +147,6 @@
 
 #define CONFIG_BOOTCOMMAND	"run nandboot"
 #define CONFIG_BOOTARGS_ROOT	"/dev/mtdblock1 rw rootfstype=yaffs"
-
 
 /*
  * Pull in common ADI header for remaining command/environment setup

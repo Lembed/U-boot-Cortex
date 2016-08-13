@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2003-2005
+ * (C) Copyright 2003-2010
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  *
  * This file is based on mpc4200fec.c,
@@ -28,10 +28,6 @@ static void tfifo_print(char *devname, mpc5xxx_fec_priv *fec);
 static void rfifo_print(char *devname, mpc5xxx_fec_priv *fec);
 #endif /* DEBUG */
 
-#if (DEBUG & 0x40)
-static uint32 local_crc32(char *string, unsigned int crc_value, int len);
-#endif
-
 typedef struct {
     uint8 data[1500];           /* actual data */
     int length;                 /* actual length */
@@ -39,8 +35,8 @@ typedef struct {
     uint8 head[16];             /* MAC header(6 + 6 + 2) + 2(aligned) */
 } NBUF;
 
-int fec5xxx_miiphy_read(char *devname, uint8 phyAddr, uint8 regAddr, uint16 * retVal);
-int fec5xxx_miiphy_write(char *devname, uint8 phyAddr, uint8 regAddr, uint16 data);
+int fec5xxx_miiphy_read(const char *devname, uint8 phyAddr, uint8 regAddr, uint16 *retVal);
+int fec5xxx_miiphy_write(const char *devname, uint8 phyAddr, uint8 regAddr, uint16 data);
 
 static int mpc5xxx_fec_init_phy(struct eth_device *dev, bd_t * bis);
 
@@ -254,6 +250,13 @@ static int mpc5xxx_fec_init(struct eth_device *dev, bd_t * bis)
 	mpc5xxx_fec_init_phy(dev, bis);
 
 	/*
+	 * Call board-specific PHY fixups (if any)
+	 */
+#ifdef CONFIG_RESET_PHY_R
+	reset_phy();
+#endif
+
+	/*
 	 * Initialize RxBD/TxBD rings
 	 */
 	mpc5xxx_fec_rbd_init(fec);
@@ -336,13 +339,11 @@ static int mpc5xxx_fec_init(struct eth_device *dev, bd_t * bis)
 	 */
 	fec->eth->xmit_fsm = 0x03000000;
 
-#if defined(CONFIG_MPC5200)
 	/*
-	 * Turn off COMM bus prefetch in the MGT5200 BestComm. It doesn't
+	 * Turn off COMM bus prefetch in the MPC5200 BestComm. It doesn't
 	 * work w/ the current receive task.
 	 */
 	 sdma->PtdCntrl |= 0x00000001;
-#endif
 
 	/*
 	 * Set priority of different initiators
@@ -406,13 +407,8 @@ static int mpc5xxx_fec_init_phy(struct eth_device *dev, bd_t * bis)
 	 */
 	if (fec->xcv_type == SEVENWIRE) {
 		/*  10MBit with 7-wire operation */
-#if defined(CONFIG_TOTAL5200)
-		/* 7-wire and USB2 on Ethernet */
-		*(vu_long *)MPC5XXX_GPS_PORT_CONFIG |= 0x00030000;
-#else	/* !CONFIG_TOTAL5200 */
 		/* 7-wire only */
 		*(vu_long *)MPC5XXX_GPS_PORT_CONFIG |= 0x00020000;
-#endif	/* CONFIG_TOTAL5200 */
 	} else {
 		/* 100MBit with MD operation */
 		*(vu_long *)MPC5XXX_GPS_PORT_CONFIG |= 0x00050000;
@@ -439,8 +435,9 @@ static int mpc5xxx_fec_init_phy(struct eth_device *dev, bd_t * bis)
 		/*
 		 * Set MII_SPEED = (1/(mii_speed * 2)) * System Clock
 		 * and do not drop the Preamble.
+		 * No MII for 7-wire mode
 		 */
-		fec->eth->mii_speed = (((gd->ipb_clk >> 20) / 5) << 1);	/* No MII for 7-wire mode */
+		fec->eth->mii_speed = (((gd->arch.ipb_clk >> 20) / 5) << 1);
 	}
 
 	if (fec->xcv_type != SEVENWIRE) {
@@ -474,11 +471,6 @@ static int mpc5xxx_fec_init_phy(struct eth_device *dev, bd_t * bis)
 		miiphy_write(dev->name, phyAddr, 0x0, 0x8000);
 		udelay(1000);
 
-#if defined(CONFIG_UC101) || defined(CONFIG_MUCMC52)
-		/* Set the LED configuration Register for the UC101
-		   and MUCMC52 Board */
-		miiphy_write(dev->name, phyAddr, 0x14, 0x4122);
-#endif
 		if (fec->xcv_type == MII10) {
 			/*
 			 * Force 10Base-T, FDX operation
@@ -579,9 +571,7 @@ static int mpc5xxx_fec_init_phy(struct eth_device *dev, bd_t * bis)
 /********************************************************************/
 static void mpc5xxx_fec_halt(struct eth_device *dev)
 {
-#if defined(CONFIG_MPC5200)
 	struct mpc5xxx_sdma *sdma = (struct mpc5xxx_sdma *)MPC5XXX_SDMA;
-#endif
 	mpc5xxx_fec_priv *fec = (mpc5xxx_fec_priv *)dev->priv;
 	int counter = 0xffff;
 
@@ -611,13 +601,11 @@ static void mpc5xxx_fec_halt(struct eth_device *dev)
 	SDMA_TASK_DISABLE (FEC_XMIT_TASK_NO);
 	SDMA_TASK_DISABLE (FEC_RECV_TASK_NO);
 
-#if defined(CONFIG_MPC5200)
 	/*
-	 * Turn on COMM bus prefetch in the MGT5200 BestComm after we're
+	 * Turn on COMM bus prefetch in the MPC5200 BestComm after we're
 	 * done. It doesn't work w/ the current receive task.
 	 */
 	 sdma->PtdCntrl &= ~0x00000001;
-#endif
 
 	/*
 	 * Disable the Ethernet Controller
@@ -647,8 +635,9 @@ static void mpc5xxx_fec_halt(struct eth_device *dev)
 		/*
 		 * Set MII_SPEED = (1/(mii_speed * 2)) * System Clock
 		 * and do not drop the Preamble.
+		 * No MII for 7-wire mode
 		 */
-		fec->eth->mii_speed = (((gd->ipb_clk >> 20) / 5) << 1); /* No MII for 7-wire mode */
+		fec->eth->mii_speed = (((gd->arch.ipb_clk >> 20) / 5) << 1);
 	}
 
 #if (DEBUG & 0x3)
@@ -710,7 +699,7 @@ static void rfifo_print(char *devname, mpc5xxx_fec_priv *fec)
 
 /********************************************************************/
 
-static int mpc5xxx_fec_send(struct eth_device *dev, volatile void *eth_data,
+static int mpc5xxx_fec_send(struct eth_device *dev, void *eth_data,
 		int data_length)
 {
 	/*
@@ -870,7 +859,7 @@ static int mpc5xxx_fec_recv(struct eth_device *dev)
 			 */
 			memcpy(buff, frame->head, 14);
 			memcpy(buff + 14, frame->data, frame_length);
-			NetReceive(buff, frame_length);
+			net_process_received_packet(buff, frame_length);
 			len = frame_length;
 		}
 		/*
@@ -912,8 +901,9 @@ int mpc5xxx_fec_initialize(bd_t * bis)
 		/*
 		 * Set MII_SPEED = (1/(mii_speed * 2)) * System Clock
 		 * and do not drop the Preamble.
+		 * No MII for 7-wire mode
 		 */
-		fec->eth->mii_speed = (((gd->ipb_clk >> 20) / 5) << 1); /* No MII for 7-wire mode */
+		fec->eth->mii_speed = (((gd->arch.ipb_clk >> 20) / 5) << 1);
 	}
 
 	dev->priv = (void *)fec;
@@ -923,7 +913,7 @@ int mpc5xxx_fec_initialize(bd_t * bis)
 	dev->send = mpc5xxx_fec_send;
 	dev->recv = mpc5xxx_fec_recv;
 
-	sprintf(dev->name, "FEC ETHERNET");
+	strcpy(dev->name, "FEC");
 	eth_register(dev);
 
 #if defined(CONFIG_MII) || defined(CONFIG_CMD_MII)
@@ -951,7 +941,7 @@ int mpc5xxx_fec_initialize(bd_t * bis)
 
 /* MII-interface related functions */
 /********************************************************************/
-int fec5xxx_miiphy_read(char *devname, uint8 phyAddr, uint8 regAddr, uint16 * retVal)
+int fec5xxx_miiphy_read(const char *devname, uint8 phyAddr, uint8 regAddr, uint16 * retVal)
 {
 	ethernet_regs *eth = (ethernet_regs *)MPC5XXX_FEC;
 	uint32 reg;		/* convenient holder for the PHY register */
@@ -993,7 +983,7 @@ int fec5xxx_miiphy_read(char *devname, uint8 phyAddr, uint8 regAddr, uint16 * re
 }
 
 /********************************************************************/
-int fec5xxx_miiphy_write(char *devname, uint8 phyAddr, uint8 regAddr, uint16 data)
+int fec5xxx_miiphy_write(const char *devname, uint8 phyAddr, uint8 regAddr, uint16 data)
 {
 	ethernet_regs *eth = (ethernet_regs *)MPC5XXX_FEC;
 	uint32 reg;		/* convenient holder for the PHY register */
@@ -1025,38 +1015,3 @@ int fec5xxx_miiphy_write(char *devname, uint8 phyAddr, uint8 regAddr, uint16 dat
 
 	return 0;
 }
-
-#if (DEBUG & 0x40)
-static uint32 local_crc32(char *string, unsigned int crc_value, int len)
-{
-	int i;
-	char c;
-	unsigned int crc, count;
-
-	/*
-	 * crc32 algorithm
-	 */
-	/*
-	 * crc = 0xffffffff; * The initialized value should be 0xffffffff
-	 */
-	crc = crc_value;
-
-	for (i = len; --i >= 0;) {
-		c = *string++;
-		for (count = 0; count < 8; count++) {
-			if ((c & 0x01) ^ (crc & 0x01)) {
-				crc >>= 1;
-				crc = crc ^ 0xedb88320;
-			} else {
-				crc >>= 1;
-			}
-			c >>= 1;
-		}
-	}
-
-	/*
-	 * In big endian system, do byte swaping for crc value
-	 */
-	 /**/ return crc;
-}
-#endif	/* DEBUG */

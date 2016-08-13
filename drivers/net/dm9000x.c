@@ -4,15 +4,7 @@
 	A Davicom DM9000 ISA NIC fast Ethernet driver for Linux.
 	Copyright (C) 1997  Sten Wang
 
-	This program is free software; you can redistribute it and/or
-	modify it under the terms of the GNU General Public License
-	as published by the Free Software Foundation; either version 2
-	of the License, or (at your option) any later version.
-
-	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
+ * SPDX-License-Identifier:	GPL-2.0+
 
   (C)Copyright 1997-1998 DAVICOM Semiconductor,Inc. All Rights Reserved.
 
@@ -25,7 +17,7 @@ V0.11	06/20/2001	REG_0A bit3=1, default enable BP with DA match
 		R17 = (R17 & 0xfff0) | NF
 
 v1.00			modify by simon 2001.9.5
-	                change for kernel 2.4.x
+			change for kernel 2.4.x
 
 v1.1   11/09/2001	fix force mode bug
 
@@ -110,19 +102,27 @@ static board_info_t dm9000_info;
 
 /* function declaration ------------------------------------- */
 static int dm9000_probe(void);
-static u16 phy_read(int);
-static void phy_write(int, u16);
+static u16 dm9000_phy_read(int);
+static void dm9000_phy_write(int, u16);
 static u8 DM9000_ior(int);
 static void DM9000_iow(int reg, u8 value);
 
 /* DM9000 network board routine ---------------------------- */
-
-#define DM9000_outb(d,r) ( *(volatile u8 *)r = d )
-#define DM9000_outw(d,r) ( *(volatile u16 *)r = d )
-#define DM9000_outl(d,r) ( *(volatile u32 *)r = d )
-#define DM9000_inb(r) (*(volatile u8 *)r)
-#define DM9000_inw(r) (*(volatile u16 *)r)
-#define DM9000_inl(r) (*(volatile u32 *)r)
+#ifndef CONFIG_DM9000_BYTE_SWAPPED
+#define DM9000_outb(d,r) writeb(d, (volatile u8 *)(r))
+#define DM9000_outw(d,r) writew(d, (volatile u16 *)(r))
+#define DM9000_outl(d,r) writel(d, (volatile u32 *)(r))
+#define DM9000_inb(r) readb((volatile u8 *)(r))
+#define DM9000_inw(r) readw((volatile u16 *)(r))
+#define DM9000_inl(r) readl((volatile u32 *)(r))
+#else
+#define DM9000_outb(d, r) __raw_writeb(d, r)
+#define DM9000_outw(d, r) __raw_writew(d, r)
+#define DM9000_outl(d, r) __raw_writel(d, r)
+#define DM9000_inb(r) __raw_readb(r)
+#define DM9000_inw(r) __raw_readw(r)
+#define DM9000_inl(r) __raw_readl(r)
+#endif
 
 #ifdef CONFIG_DM9000_DEBUG
 static void
@@ -342,6 +342,9 @@ static int dm9000_init(struct eth_device *dev, bd_t *bd)
 	DM9000_iow(DM9000_ISR, ISR_ROOS | ISR_ROS | ISR_PTS | ISR_PRS);
 
 	printf("MAC: %pM\n", dev->enetaddr);
+	if (!is_valid_ethaddr(dev->enetaddr)) {
+		printf("WARNING: Bad MAC address (uninitialized EEPROM?)\n");
+	}
 
 	/* fill device MAC address registers */
 	for (i = 0, oft = DM9000_PAR; i < 6; i++, oft++)
@@ -361,7 +364,7 @@ static int dm9000_init(struct eth_device *dev, bd_t *bd)
 	DM9000_iow(DM9000_IMR, IMR_PAR);
 
 	i = 0;
-	while (!(phy_read(1) & 0x20)) {	/* autonegation complete bit */
+	while (!(dm9000_phy_read(1) & 0x20)) {	/* autonegation complete bit */
 		udelay(1000);
 		i++;
 		if (i == 10000) {
@@ -371,7 +374,7 @@ static int dm9000_init(struct eth_device *dev, bd_t *bd)
 	}
 
 	/* see what we've got */
-	lnk = phy_read(17) >> 12;
+	lnk = dm9000_phy_read(17) >> 12;
 	printf("operating at ");
 	switch (lnk) {
 	case 1:
@@ -398,8 +401,7 @@ static int dm9000_init(struct eth_device *dev, bd_t *bd)
   Hardware start transmission.
   Send a packet to media from the upper layer.
 */
-static int dm9000_send(struct eth_device *netdev, volatile void *packet,
-		     int length)
+static int dm9000_send(struct eth_device *netdev, void *packet, int length)
 {
 	int tmo;
 	struct board_info *db = &dm9000_info;
@@ -445,7 +447,7 @@ static void dm9000_halt(struct eth_device *netdev)
 	DM9000_DBG("%s\n", __func__);
 
 	/* RESET devie */
-	phy_write(0, 0x8000);	/* PHY RESET */
+	dm9000_phy_write(0, 0x8000);	/* PHY RESET */
 	DM9000_iow(DM9000_GPR, 0x01);	/* Power-Down PHY */
 	DM9000_iow(DM9000_IMR, 0x80);	/* Disable all interrupt */
 	DM9000_iow(DM9000_RCR, 0x00);	/* Disable RX */
@@ -456,7 +458,8 @@ static void dm9000_halt(struct eth_device *netdev)
 */
 static int dm9000_rx(struct eth_device *netdev)
 {
-	u8 rxbyte, *rdptr = (u8 *) NetRxPackets[0];
+	u8 rxbyte;
+	u8 *rdptr = (u8 *)net_rx_packets[0];
 	u16 RxStatus, RxLen = 0;
 	struct board_info *db = &dm9000_info;
 
@@ -517,7 +520,7 @@ static int dm9000_rx(struct eth_device *netdev)
 			DM9000_DMP_PACKET(__func__ , rdptr, RxLen);
 
 			DM9000_DBG("passing packet to upper layer\n");
-			NetReceive(NetRxPackets[0], RxLen);
+			net_process_received_packet(net_rx_packets[0], RxLen);
 		}
 	}
 	return 0;
@@ -581,7 +584,7 @@ DM9000_iow(int reg, u8 value)
    Read a word from phyxcer
 */
 static u16
-phy_read(int reg)
+dm9000_phy_read(int reg)
 {
 	u16 val;
 
@@ -593,7 +596,7 @@ phy_read(int reg)
 	val = (DM9000_ior(DM9000_EPDRH) << 8) | DM9000_ior(DM9000_EPDRL);
 
 	/* The read data keeps on REG_0D & REG_0E */
-	DM9000_DBG("phy_read(0x%x): 0x%x\n", reg, val);
+	DM9000_DBG("dm9000_phy_read(0x%x): 0x%x\n", reg, val);
 	return val;
 }
 
@@ -601,7 +604,7 @@ phy_read(int reg)
    Write a word to phyxcer
 */
 static void
-phy_write(int reg, u16 value)
+dm9000_phy_write(int reg, u16 value)
 {
 
 	/* Fill the phyxcer register into REG_0C */
@@ -613,7 +616,7 @@ phy_write(int reg, u16 value)
 	DM9000_iow(DM9000_EPCR, 0xa);	/* Issue phyxcer write command */
 	udelay(500);			/* Wait write complete */
 	DM9000_iow(DM9000_EPCR, 0x0);	/* Clear phyxcer write command */
-	DM9000_DBG("phy_write(reg:0x%x, value:0x%x)\n", reg, value);
+	DM9000_DBG("dm9000_phy_write(reg:0x%x, value:0x%x)\n", reg, value);
 }
 
 int dm9000_initialize(bd_t *bis)
@@ -627,7 +630,7 @@ int dm9000_initialize(bd_t *bis)
 	dev->halt = dm9000_halt;
 	dev->send = dm9000_send;
 	dev->recv = dm9000_rx;
-	sprintf(dev->name, "dm9000");
+	strcpy(dev->name, "dm9000");
 
 	eth_register(dev);
 

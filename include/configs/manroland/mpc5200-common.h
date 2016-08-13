@@ -2,23 +2,7 @@
  * (C) Copyright 2009
  * Heiko Schocher, DENX Software Engineering, hs@denx.de.
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __MANROLAND_MPC52XX__COMMON_H
@@ -28,8 +12,7 @@
  * High Level Configuration Options
  * (easy to change)
  */
-#define CONFIG_MPC5xxx		1	/* This is an MPC5xxx CPU		*/
-#define CONFIG_MPC5200		1	/* (more precisely an MPC5200 CPU)	*/
+#define CONFIG_MPC5200		1	/* MPC5200 CPU */
 
 #define CONFIG_SYS_MPC5XXX_CLKIN	33000000 /* ... running at 33.000000MHz	*/
 
@@ -42,7 +25,7 @@
 #define CONFIG_SYS_BAUDRATE_TABLE	{ 9600, 19200, 38400, 57600, 115200,\
 					 230400 }
 
-#if (TEXT_BASE == 0xFFF00000) /* Boot low */
+#if (CONFIG_SYS_TEXT_BASE == 0xFFF00000) /* Boot low */
 #   define CONFIG_SYS_LOWBOOT		1
 #endif
 
@@ -88,7 +71,7 @@
 
 #define CONFIG_SYS_FLASH_SIZE		0x00800000 /* 8 MByte */
 
-#define CONFIG_ENV_ADDR		(TEXT_BASE+0x40000) /* second sector */
+#define CONFIG_ENV_ADDR		(CONFIG_SYS_TEXT_BASE+0x40000) /* second sector */
 #define CONFIG_SYS_MAX_FLASH_BANKS	1	/* max num of flash banks
 					   (= chip selects) */
 #define CONFIG_SYS_FLASH_ERASE_TOUT	240000	/* Flash Erase Timeout [ms]*/
@@ -113,9 +96,8 @@
 #define CONFIG_SYS_MBAR		0xF0000000
 #define CONFIG_SYS_DEFAULT_MBAR	0x80000000
 
-#define CONFIG_SYS_GBL_DATA_SIZE	128
-#define CONFIG_SYS_GBL_DATA_OFFSET	(CONFIG_SYS_INIT_RAM_END -\
-					 CONFIG_SYS_GBL_DATA_SIZE)
+#define CONFIG_SYS_GBL_DATA_OFFSET	(CONFIG_SYS_INIT_RAM_SIZE -\
+					 GENERATED_GBL_DATA_SIZE)
 #define CONFIG_SYS_INIT_SP_OFFSET	CONFIG_SYS_GBL_DATA_OFFSET
 
 #define CONFIG_SYS_SDRAM_BASE		0x00000000
@@ -135,12 +117,12 @@
 #define CONFIG_SYS_INIT_RAM_ADDR	MPC5XXX_SRAM
 #ifdef CONFIG_POST
 /* preserve space for the post_word at end of on-chip SRAM */
-#define CONFIG_SYS_INIT_RAM_END	MPC5XXX_SRAM_POST_SIZE
+#define CONFIG_SYS_INIT_RAM_SIZE	MPC5XXX_SRAM_POST_SIZE
 #else
-#define CONFIG_SYS_INIT_RAM_END	MPC5XXX_SRAM_SIZE
+#define CONFIG_SYS_INIT_RAM_SIZE	MPC5XXX_SRAM_SIZE
 #endif
 
-#define CONFIG_SYS_MONITOR_BASE    TEXT_BASE
+#define CONFIG_SYS_MONITOR_BASE    CONFIG_SYS_TEXT_BASE
 #if (CONFIG_SYS_MONITOR_BASE < CONFIG_SYS_FLASH_BASE)
 #   define CONFIG_SYS_RAMBOOT		1
 #endif
@@ -160,8 +142,6 @@
 /*use  Hardware WDT */
 #define CONFIG_HW_WATCHDOG
 
-#define CONFIG_SYS_HZ			1000	/* decrementer freq: 1 ms ticks */
-
 #define CONFIG_SYS_CACHELINE_SIZE	32	/* For MPC5xxx CPUs		*/
 #if defined(CONFIG_CMD_KGDB)
 #  define CONFIG_SYS_CACHELINE_SHIFT	5	/* log base 2 of the above value*/
@@ -170,13 +150,8 @@
 /*
  * Various low-level settings
  */
-#if defined(CONFIG_MPC5200)
 #define CONFIG_SYS_HID0_INIT		HID0_ICE | HID0_ICFI
 #define CONFIG_SYS_HID0_FINAL		HID0_ICE
-#else
-#define CONFIG_SYS_HID0_INIT		0
-#define CONFIG_SYS_HID0_FINAL		0
-#endif
 
 #define CONFIG_SYS_BOOTCS_START	CONFIG_SYS_FLASH_BASE
 #define CONFIG_SYS_BOOTCS_SIZE		CONFIG_SYS_FLASH_SIZE

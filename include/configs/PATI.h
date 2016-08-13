@@ -2,22 +2,7 @@
  * (C) Copyright 2003
  * Denis Peter d.peter@mpl.ch
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation,
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -33,12 +18,14 @@
 
 #define CONFIG_MPC555		1		/* This is an MPC555 CPU		*/
 #define CONFIG_PATI		1		/* ...On a PATI board	*/
+
+#define	CONFIG_SYS_TEXT_BASE	0xFFF00000
+
 /* Serial Console Configuration */
 #define	CONFIG_5xx_CONS_SCI1
 #undef	CONFIG_5xx_CONS_SCI2
 
 #define CONFIG_BAUDRATE		9600
-
 
 /*
  * BOOTP options
@@ -48,32 +35,15 @@
 #define CONFIG_BOOTP_GATEWAY
 #define CONFIG_BOOTP_HOSTNAME
 
-
 /*
  * Command line configuration.
  */
-#define CONFIG_CMD_MEMORY
-#define CONFIG_CMD_LOADB
 #define CONFIG_CMD_REGINFO
-#define CONFIG_CMD_FLASH
-#define CONFIG_CMD_LOADS
-#define CONFIG_CMD_SAVEENV
 #define CONFIG_CMD_REGINFO
-#define CONFIG_CMD_BDI
-#define CONFIG_CMD_CONSOLE
-#define CONFIG_CMD_RUN
 #define CONFIG_CMD_BSP
-#define CONFIG_CMD_IMI
 #define CONFIG_CMD_EEPROM
 #define CONFIG_CMD_IRQ
-#define CONFIG_CMD_MISC
 
-
-#if 0
-#define CONFIG_BOOTDELAY	-1		/* autoboot disabled			*/
-#else
-#define CONFIG_BOOTDELAY	5		/* autoboot after 5 seconds		*/
-#endif
 #define CONFIG_BOOTCOMMAND	""	/* autoboot command			*/
 
 #define CONFIG_BOOTARGS		""		/* */
@@ -91,7 +61,6 @@
 #define CONFIG_PREBOOT
 
 #define	CONFIG_SYS_LONGHELP				/* undef to save memory		*/
-#define	CONFIG_SYS_PROMPT		"pati=> "		/* Monitor Command Prompt	*/
 #if defined(CONFIG_CMD_KGDB)
 #define	CONFIG_SYS_CBSIZE		1024		/* Console I/O Buffer Size	*/
 #else
@@ -106,10 +75,9 @@
 
 #define	CONFIG_SYS_LOAD_ADDR		0x100000	/* default load address		*/
 
-#define	CONFIG_SYS_HZ			1000		/* Decrementer freq: 1 ms ticks	*/
-
 #define CONFIG_SYS_BAUDRATE_TABLE	{ 9600, 19200, 38400, 57600, 115200, 1250000 }
 
+#define CONFIG_BOARD_EARLY_INIT_F
 
 /***********************************************************************
  * Last Stage Init
@@ -129,9 +97,8 @@
  * Definitions for initial stack pointer and data area
  */
 #define CONFIG_SYS_INIT_RAM_ADDR	(CONFIG_SYS_IMMR + 0x003f9800)	/* Physical start adress of internal MPC555 writable RAM */
-#define	CONFIG_SYS_INIT_RAM_END	(CONFIG_SYS_IMMR + 0x003fffff)	/* Physical end adress of internal MPC555 used RAM area	*/
-#define	CONFIG_SYS_GBL_DATA_SIZE	128			/* Size in bytes reserved for initial global data */
-#define CONFIG_SYS_GBL_DATA_OFFSET	((CONFIG_SYS_INIT_RAM_END - CONFIG_SYS_INIT_RAM_ADDR) - CONFIG_SYS_GBL_DATA_SIZE) /* Offset from the beginning of ram */
+#define	CONFIG_SYS_INIT_RAM_SIZE	(CONFIG_SYS_IMMR + 0x003fffff)	/* Physical end adress of internal MPC555 used RAM area	*/
+#define CONFIG_SYS_GBL_DATA_OFFSET	((CONFIG_SYS_INIT_RAM_SIZE - CONFIG_SYS_INIT_RAM_ADDR) - GENERATED_GBL_DATA_SIZE) /* Offset from the beginning of ram */
 #define	CONFIG_SYS_INIT_SP_ADDR	(CONFIG_SYS_IMMR + 0x03fa000)	/* Physical start adress of inital stack */
 /*
  * Start addresses for the final memory configuration
@@ -144,7 +111,7 @@
 #define PLD_CONFIG_BASE		0x04001000	/* PLD  (CS3) */
 
 #define	CONFIG_SYS_MONITOR_BASE	0xFFF00000
-/* CONFIG_SYS_FLASH_BASE	*/ /* TEXT_BASE is defined in the board config.mk file.	*/
+/* CONFIG_SYS_FLASH_BASE	*/ /* CONFIG_SYS_TEXT_BASE is defined in the board config.mk file.	*/
 						/* This adress is given to the linker with -Ttext to	*/
 						/* locate the text section at this adress.		*/
 #define	CONFIG_SYS_MONITOR_LEN		(256 << 10)	/* Reserve 192 kB for Monitor				*/
@@ -159,18 +126,22 @@
  */
 #define	CONFIG_SYS_BOOTMAPSZ		(8 << 20)	/* Initial Memory map for Linux		*/
 
-
 /*-----------------------------------------------------------------------
  * FLASH organization
  *-----------------------------------------------------------------------
  *
  */
 
-#define CONFIG_SYS_MAX_FLASH_BANKS		1		/* Max number of memory banks		*/
-#define CONFIG_SYS_MAX_FLASH_SECT		128		/* Max number of sectors on one chip	*/
-#define CONFIG_SYS_FLASH_ERASE_TOUT	180000		/* Timeout for Flash Erase (in ms)	*/
-#define CONFIG_SYS_FLASH_WRITE_TOUT	600		/* Timeout for Flash Write (in ms)	*/
+#define CONFIG_SYS_FLASH_PROTECTION
+#define CONFIG_SYS_FLASH_EMPTY_INFO
 
+#define CONFIG_SYS_FLASH_CFI
+#define CONFIG_FLASH_CFI_DRIVER
+
+#define CONFIG_FLASH_SHOW_PROGRESS	45
+
+#define CONFIG_SYS_MAX_FLASH_BANKS	1
+#define CONFIG_SYS_MAX_FLASH_SECT	128
 
 #define	CONFIG_ENV_IS_IN_EEPROM
 #ifdef	CONFIG_ENV_IS_IN_EEPROM
@@ -183,7 +154,6 @@
 #define	CONFIG_ENV_SIZE		0x00002000		/* Set whole sector as env		*/
 #define CONFIG_ENV_OFFSET		((0 - CONFIG_SYS_FLASH_BASE) - CONFIG_ENV_SIZE)		/* Environment starts at this adress	*/
 #endif
-
 
 #define CONFIG_SPI		1
 #define CONFIG_SYS_SPI_CS_USED	0x09 /* CS0 and CS3 are used */
@@ -243,7 +213,6 @@
  */
 #define CONFIG_SYS_OSC_CLK	((uint)4000000)		/* Oscillator clock is 4MHz	*/
 
-
 #define CONFIG_SYS_PLPRCR	(PLPRCR_MF_9 | PLPRCR_DIVF_0)
 
 /*-----------------------------------------------------------------------
@@ -282,16 +251,6 @@
  * Initialise to zero
  */
 #define CONFIG_SYS_DER			0x00000000
-
-
-/*
- * Internal Definitions
- *
- * Boot Flags
- */
-#define	BOOTFLAG_COLD	0x01			/* Normal Power-On: Boot from FLASH	*/
-#define BOOTFLAG_WARM	0x02			/* Software reboot			*/
-
 
 #define VERSION_TAG "released"
 #define CONFIG_ISO_STRING "MEV-10084-001"

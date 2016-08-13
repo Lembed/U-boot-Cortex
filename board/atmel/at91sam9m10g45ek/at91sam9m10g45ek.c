@@ -1,41 +1,23 @@
 /*
  * (C) Copyright 2007-2008
- * Stelian Pop <stelian.pop@leadtechdesign.com>
+ * Stelian Pop <stelian@popies.net>
  * Lead Tech Design <www.leadtechdesign.com>
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <asm/sizes.h>
-#include <asm/arch/at91sam9g45.h>
-#include <asm/arch/at91sam9_matrix.h>
+#include <asm/io.h>
+#include <asm/arch/clk.h>
+#include <asm/arch/at91sam9g45_matrix.h>
 #include <asm/arch/at91sam9_smc.h>
 #include <asm/arch/at91_common.h>
-#include <asm/arch/at91_pmc.h>
-#include <asm/arch/at91_rstc.h>
-#include <asm/arch/clk.h>
 #include <asm/arch/gpio.h>
-#include <asm/arch/io.h>
-#include <asm/arch/hardware.h>
+#include <asm/arch/clk.h>
 #include <lcd.h>
+#include <linux/mtd/nand.h>
 #include <atmel_lcdc.h>
+#include <atmel_mci.h>
 #if defined(CONFIG_RESET_PHY_R) && defined(CONFIG_MACB)
 #include <net.h>
 #endif
@@ -49,35 +31,37 @@ DECLARE_GLOBAL_DATA_PTR;
  */
 
 #ifdef CONFIG_CMD_NAND
-static void at91sam9m10g45ek_nand_hw_init(void)
+void at91sam9m10g45ek_nand_hw_init(void)
 {
+	struct at91_smc *smc = (struct at91_smc *)ATMEL_BASE_SMC;
+	struct at91_matrix *matrix = (struct at91_matrix *)ATMEL_BASE_MATRIX;
 	unsigned long csa;
 
 	/* Enable CS3 */
-	csa = at91_sys_read(AT91_MATRIX_EBICSA);
-	at91_sys_write(AT91_MATRIX_EBICSA,
-		       csa | AT91_MATRIX_EBI_CS3A_SMC_SMARTMEDIA);
+	csa = readl(&matrix->ebicsa);
+	csa |= AT91_MATRIX_EBI_CS3A_SMC_SMARTMEDIA;
+	writel(csa, &matrix->ebicsa);
 
 	/* Configure SMC CS3 for NAND/SmartMedia */
-	at91_sys_write(AT91_SMC_SETUP(3),
-		       AT91_SMC_NWESETUP_(1) | AT91_SMC_NCS_WRSETUP_(0) |
-		       AT91_SMC_NRDSETUP_(1) | AT91_SMC_NCS_RDSETUP_(0));
-	at91_sys_write(AT91_SMC_PULSE(3),
-		       AT91_SMC_NWEPULSE_(4) | AT91_SMC_NCS_WRPULSE_(3) |
-		       AT91_SMC_NRDPULSE_(3) | AT91_SMC_NCS_RDPULSE_(2));
-	at91_sys_write(AT91_SMC_CYCLE(3),
-		       AT91_SMC_NWECYCLE_(7) | AT91_SMC_NRDCYCLE_(4));
-	at91_sys_write(AT91_SMC_MODE(3),
-		       AT91_SMC_READMODE | AT91_SMC_WRITEMODE |
-		       AT91_SMC_EXNWMODE_DISABLE |
+	writel(AT91_SMC_SETUP_NWE(1) | AT91_SMC_SETUP_NCS_WR(0) |
+	       AT91_SMC_SETUP_NRD(1) | AT91_SMC_SETUP_NCS_RD(0),
+	       &smc->cs[3].setup);
+	writel(AT91_SMC_PULSE_NWE(4) | AT91_SMC_PULSE_NCS_WR(3) |
+	       AT91_SMC_PULSE_NRD(3) | AT91_SMC_PULSE_NCS_RD(2),
+	       &smc->cs[3].pulse);
+	writel(AT91_SMC_CYCLE_NWE(7) | AT91_SMC_CYCLE_NRD(4),
+	       &smc->cs[3].cycle);
+	writel(AT91_SMC_MODE_RM_NRD | AT91_SMC_MODE_WM_NWE |
+	       AT91_SMC_MODE_EXNW_DISABLE |
 #ifdef CONFIG_SYS_NAND_DBW_16
-		       AT91_SMC_DBW_16 |
+	       AT91_SMC_MODE_DBW_16 |
 #else /* CONFIG_SYS_NAND_DBW_8 */
-		       AT91_SMC_DBW_8 |
+	       AT91_SMC_MODE_DBW_8 |
 #endif
-		       AT91_SMC_TDF_(3));
+	       AT91_SMC_MODE_TDF_CYCLE(3),
+	       &smc->cs[3].mode);
 
-	at91_sys_write(AT91_PMC_PCER, 1 << AT91SAM9G45_ID_PIOC);
+	at91_periph_clk_enable(ATMEL_ID_PIOC);
 
 	/* Configure RDY/BSY */
 	at91_set_gpio_input(CONFIG_SYS_NAND_READY_PIN, 1);
@@ -87,50 +71,113 @@ static void at91sam9m10g45ek_nand_hw_init(void)
 }
 #endif
 
+#if defined(CONFIG_SPL_BUILD)
+#include <spl.h>
+#include <nand.h>
+
+void at91_spl_board_init(void)
+{
+	/*
+	 * On the at91sam9m10g45ek board, the chip wm9711 stays in the
+	 * test mode, so it needs do some action to exit test mode.
+	 */
+	at91_periph_clk_enable(ATMEL_ID_PIODE);
+	at91_set_gpio_output(AT91_PIN_PD7, 0);
+	at91_set_gpio_output(AT91_PIN_PD8, 0);
+	at91_set_pio_pullup(AT91_PIO_PORTD, 7, 1);
+	at91_set_pio_pullup(AT91_PIO_PORTD, 8, 1);
+
+#ifdef CONFIG_SYS_USE_MMC
+	at91_mci_hw_init();
+#elif CONFIG_SYS_USE_NANDFLASH
+	at91sam9m10g45ek_nand_hw_init();
+#endif
+}
+
+#include <asm/arch/atmel_mpddrc.h>
+static void ddr2_conf(struct atmel_mpddrc_config *ddr2)
+{
+	ddr2->md = (ATMEL_MPDDRC_MD_DBW_16_BITS | ATMEL_MPDDRC_MD_DDR2_SDRAM);
+
+	ddr2->cr = (ATMEL_MPDDRC_CR_NC_COL_10 |
+		    ATMEL_MPDDRC_CR_NR_ROW_14 |
+		    ATMEL_MPDDRC_CR_DQMS_SHARED |
+		    ATMEL_MPDDRC_CR_CAS_DDR_CAS3);
+
+	ddr2->rtr = 0x24b;
+
+	ddr2->tpr0 = (6 << ATMEL_MPDDRC_TPR0_TRAS_OFFSET |/* 6*7.5 = 45 ns */
+		      2 << ATMEL_MPDDRC_TPR0_TRCD_OFFSET |/* 2*7.5 = 15 ns */
+		      2 << ATMEL_MPDDRC_TPR0_TWR_OFFSET | /* 2*7.5 = 15 ns */
+		      8 << ATMEL_MPDDRC_TPR0_TRC_OFFSET | /* 8*7.5 = 60 ns */
+		      2 << ATMEL_MPDDRC_TPR0_TRP_OFFSET | /* 2*7.5 = 15 ns */
+		      1 << ATMEL_MPDDRC_TPR0_TRRD_OFFSET | /* 1*7.5= 7.5 ns*/
+		      1 << ATMEL_MPDDRC_TPR0_TWTR_OFFSET | /* 1 clk cycle */
+		      2 << ATMEL_MPDDRC_TPR0_TMRD_OFFSET); /* 2 clk cycles */
+
+	ddr2->tpr1 = (2 << ATMEL_MPDDRC_TPR1_TXP_OFFSET | /* 2*7.5 = 15 ns */
+		      200 << ATMEL_MPDDRC_TPR1_TXSRD_OFFSET |
+		      16 << ATMEL_MPDDRC_TPR1_TXSNR_OFFSET |
+		      14 << ATMEL_MPDDRC_TPR1_TRFC_OFFSET);
+
+	ddr2->tpr2 = (1 << ATMEL_MPDDRC_TPR2_TRTP_OFFSET |
+		      0 << ATMEL_MPDDRC_TPR2_TRPA_OFFSET |
+		      7 << ATMEL_MPDDRC_TPR2_TXARDS_OFFSET |
+		      2 << ATMEL_MPDDRC_TPR2_TXARD_OFFSET);
+}
+
+void mem_init(void)
+{
+	struct atmel_mpddrc_config ddr2;
+
+	ddr2_conf(&ddr2);
+
+	at91_system_clk_enable(AT91_PMC_DDR);
+
+	/* DDRAM2 Controller initialize */
+	ddr2_init(ATMEL_BASE_DDRSDRC0, ATMEL_BASE_CS6, &ddr2);
+}
+#endif
+
+#ifdef CONFIG_CMD_USB
+static void at91sam9m10g45ek_usb_hw_init(void)
+{
+	at91_periph_clk_enable(ATMEL_ID_PIODE);
+
+	at91_set_gpio_output(AT91_PIN_PD1, 0);
+	at91_set_gpio_output(AT91_PIN_PD3, 0);
+}
+#endif
+
 #ifdef CONFIG_MACB
 static void at91sam9m10g45ek_macb_hw_init(void)
 {
-	unsigned long rstc;
+	struct at91_port *pioa = (struct at91_port *)ATMEL_BASE_PIOA;
 
-	/* Enable clock */
-	at91_sys_write(AT91_PMC_PCER, 1 << AT91SAM9G45_ID_EMAC);
+	at91_periph_clk_enable(ATMEL_ID_EMAC);
 
 	/*
 	 * Disable pull-up on:
-	 *	RXDV (PA15) => PHY normal mode (not Test mode)
-	 * 	ERX0 (PA12) => PHY ADDR0
-	 *	ERX1 (PA13) => PHY ADDR1 => PHYADDR = 0x0
+	 *      RXDV (PA15) => PHY normal mode (not Test mode)
+	 *      ERX0 (PA12) => PHY ADDR0
+	 *      ERX1 (PA13) => PHY ADDR1 => PHYADDR = 0x0
 	 *
 	 * PHY has internal pull-down
 	 */
 	writel(pin_to_mask(AT91_PIN_PA15) |
 	       pin_to_mask(AT91_PIN_PA12) |
 	       pin_to_mask(AT91_PIN_PA13),
-	       pin_to_controller(AT91_PIN_PA0) + PIO_PUDR);
+	       &pioa->pudr);
 
-	rstc = at91_sys_read(AT91_RSTC_MR);
-
-	/* Need to reset PHY -> 500ms reset */
-	at91_sys_write(AT91_RSTC_MR, AT91_RSTC_KEY |
-				     (AT91_RSTC_ERSTL & (0x0D << 8)) |
-				     AT91_RSTC_URSTEN);
-
-	at91_sys_write(AT91_RSTC_CR, AT91_RSTC_KEY | AT91_RSTC_EXTRST);
-
-	/* Wait for end hardware reset */
-	while (!(at91_sys_read(AT91_RSTC_SR) & AT91_RSTC_NRSTL));
-
-	/* Restore NRST value */
-	at91_sys_write(AT91_RSTC_MR, AT91_RSTC_KEY |
-				     (rstc) |
-				     AT91_RSTC_URSTEN);
+	at91_phy_reset();
 
 	/* Re-enable pull-up */
 	writel(pin_to_mask(AT91_PIN_PA15) |
 	       pin_to_mask(AT91_PIN_PA12) |
 	       pin_to_mask(AT91_PIN_PA13),
-	       pin_to_controller(AT91_PIN_PA0) + PIO_PUER);
+	       &pioa->puer);
 
+	/* And the pins. */
 	at91_macb_hw_init();
 }
 #endif
@@ -138,20 +185,20 @@ static void at91sam9m10g45ek_macb_hw_init(void)
 #ifdef CONFIG_LCD
 
 vidinfo_t panel_info = {
-	vl_col:		480,
-	vl_row:		272,
-	vl_clk:		9000000,
-	vl_sync:	ATMEL_LCDC_INVLINE_NORMAL |
-			ATMEL_LCDC_INVFRAME_NORMAL,
-	vl_bpix:	3,
-	vl_tft:		1,
-	vl_hsync_len:	45,
-	vl_left_margin:	1,
-	vl_right_margin:1,
-	vl_vsync_len:	1,
-	vl_upper_margin:40,
-	vl_lower_margin:1,
-	mmio:		AT91SAM9G45_LCDC_BASE,
+	.vl_col =		480,
+	.vl_row =		272,
+	.vl_clk =		9000000,
+	.vl_sync =		ATMEL_LCDC_INVLINE_NORMAL |
+				ATMEL_LCDC_INVFRAME_NORMAL,
+	.vl_bpix =		3,
+	.vl_tft =		1,
+	.vl_hsync_len =		45,
+	.vl_left_margin =	1,
+	.vl_right_margin =	1,
+	.vl_vsync_len =		1,
+	.vl_upper_margin =	40,
+	.vl_lower_margin =	1,
+	.mmio =			ATMEL_BASE_LCDC,
 };
 
 
@@ -198,7 +245,7 @@ static void at91sam9m10g45ek_lcd_hw_init(void)
 	at91_set_A_periph(AT91_PIN_PE29, 0);	/* LCDD22 */
 	at91_set_A_periph(AT91_PIN_PE30, 0);	/* LCDD23 */
 
-	at91_sys_write(AT91_PMC_PCER, 1 << AT91SAM9G45_ID_LCDC);
+	at91_periph_clk_enable(ATMEL_ID_LCDC);
 
 	gd->fb_base = CONFIG_AT91SAM9G45_LCD_BASE;
 }
@@ -217,7 +264,7 @@ void lcd_show_board_info(void)
 	lcd_printf ("(C) 2008 ATMEL Corp\n");
 	lcd_printf ("at91support@atmel.com\n");
 	lcd_printf ("%s CPU at %s MHz\n",
-		CONFIG_SYS_AT91_CPU_NAME,
+		ATMEL_CPU_NAME,
 		strmhz(temp, get_cpu_clk_rate()));
 
 	dram_size = 0;
@@ -225,7 +272,7 @@ void lcd_show_board_info(void)
 		dram_size += gd->bd->bi_dram[i].size;
 	nand_size = 0;
 	for (i = 0; i < CONFIG_SYS_MAX_NAND_DEVICE; i++)
-		nand_size += nand_info[i].size;
+		nand_size += nand_info[i]->size;
 	lcd_printf ("  %ld MB SDRAM, %ld MB NAND\n",
 		dram_size >> 20,
 		nand_size >> 20 );
@@ -233,23 +280,38 @@ void lcd_show_board_info(void)
 #endif /* CONFIG_LCD_INFO */
 #endif
 
+#ifdef CONFIG_GENERIC_ATMEL_MCI
+int board_mmc_init(bd_t *bis)
+{
+	at91_mci_hw_init();
+
+	return atmel_mci_init((void *)ATMEL_BASE_MCI0);
+}
+#endif
+
+int board_early_init_f(void)
+{
+	at91_seriald_hw_init();
+	return 0;
+}
+
 int board_init(void)
 {
-	/* Enable Ctrlc */
-	console_init_f();
-
 	/* arch number of AT91SAM9M10G45EK-Board */
 #ifdef CONFIG_AT91SAM9M10G45EK
 	gd->bd->bi_arch_number = MACH_TYPE_AT91SAM9M10G45EK;
 #elif defined CONFIG_AT91SAM9G45EKES
 	gd->bd->bi_arch_number = MACH_TYPE_AT91SAM9G45EKES;
 #endif
-	/* adress of boot parameters */
-	gd->bd->bi_boot_params = PHYS_SDRAM + 0x100;
 
-	at91_serial_hw_init();
+	/* adress of boot parameters */
+	gd->bd->bi_boot_params = CONFIG_SYS_SDRAM_BASE + 0x100;
+
 #ifdef CONFIG_CMD_NAND
 	at91sam9m10g45ek_nand_hw_init();
+#endif
+#ifdef CONFIG_CMD_USB
+	at91sam9m10g45ek_usb_hw_init();
 #endif
 #ifdef CONFIG_HAS_DATAFLASH
 	at91_spi0_hw_init(1 << 0);
@@ -257,11 +319,9 @@ int board_init(void)
 #ifdef CONFIG_ATMEL_SPI
 	at91_spi0_hw_init(1 << 4);
 #endif
-
 #ifdef CONFIG_MACB
 	at91sam9m10g45ek_macb_hw_init();
 #endif
-
 #ifdef CONFIG_LCD
 	at91sam9m10g45ek_lcd_hw_init();
 #endif
@@ -270,21 +330,14 @@ int board_init(void)
 
 int dram_init(void)
 {
-	gd->bd->bi_dram[0].start = PHYS_SDRAM;
-	gd->bd->bi_dram[0].size = PHYS_SDRAM_SIZE;
+	gd->ram_size = get_ram_size((void *) CONFIG_SYS_SDRAM_BASE,
+				    CONFIG_SYS_SDRAM_SIZE);
 	return 0;
 }
 
 #ifdef CONFIG_RESET_PHY_R
 void reset_phy(void)
 {
-#ifdef CONFIG_MACB
-	/*
-	 * Initialize ethernet HW addr prior to starting Linux,
-	 * needed for nfsroot
-	 */
-	eth_init(gd->bd);
-#endif
 }
 #endif
 
@@ -292,7 +345,7 @@ int board_eth_init(bd_t *bis)
 {
 	int rc = 0;
 #ifdef CONFIG_MACB
-	rc = macb_eth_initialize(0, (void *)AT91SAM9G45_BASE_EMAC, 0x00);
+	rc = macb_eth_initialize(0, (void *)ATMEL_BASE_EMAC, 0x00);
 #endif
 	return rc;
 }

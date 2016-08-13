@@ -6,27 +6,15 @@
  * Jacqueline Pira-Ferriol, AMCC/IBM, jpira-ferriol@fr.ibm.com
  * Alain Saurel,	    AMCC/IBM, alain.saurel@fr.ibm.com
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <errno.h>
 #include <libfdt.h>
 #include <fdt_support.h>
-#include <ppc4xx.h>
-#include <asm/gpio.h>
+#include <asm/ppc4xx.h>
+#include <asm/ppc4xx-gpio.h>
 #include <asm/processor.h>
 #include <asm/io.h>
 #include <asm/bitops.h>
@@ -155,7 +143,7 @@ int misc_init_r(void)
 	gd->bd->bi_flashstart = 0 - gd->bd->bi_flashsize;
 	gd->bd->bi_flashoffset = 0;
 
-#if defined(CONFIG_NAND_U_BOOT) || defined(CONFIG_NAND_SPL)
+#if defined(CONFIG_SYS_RAMBOOT)
 	mtdcr(EBC0_CFGADDR, PB3CR);
 #else
 	mtdcr(EBC0_CFGADDR, PB0CR);
@@ -163,7 +151,7 @@ int misc_init_r(void)
 	pbcr = mfdcr(EBC0_CFGDATA);
 	size_val = ffs(gd->bd->bi_flashsize) - 21;
 	pbcr = (pbcr & 0x0001ffff) | gd->bd->bi_flashstart | (size_val << 17);
-#if defined(CONFIG_NAND_U_BOOT) || defined(CONFIG_NAND_SPL)
+#if defined(CONFIG_SYS_RAMBOOT)
 	mtdcr(EBC0_CFGADDR, PB3CR);
 #else
 	mtdcr(EBC0_CFGADDR, PB0CR);
@@ -321,15 +309,16 @@ int misc_init_r(void)
 	 * This fix will make the MAL burst disabling patch for the Linux
 	 * EMAC driver obsolete.
 	 */
-	reg = mfdcr(PLB4_ACR) & ~PLB4_ACR_WRP;
-	mtdcr(PLB4_ACR, reg);
+	reg = mfdcr(PLB4A0_ACR) & ~PLB4Ax_ACR_WRP_MASK;
+	mtdcr(PLB4A0_ACR, reg);
 
 	return 0;
 }
 
 int checkboard(void)
 {
-	char *s = getenv("serial#");
+	char buf[64];
+	int i = getenv_f("serial#", buf, sizeof(buf));
 	u8 rev;
 	u32 clock = get_async_pci_freq();
 
@@ -342,9 +331,9 @@ int checkboard(void)
 	rev = in_8((void *)(CONFIG_SYS_BCSR_BASE + 0));
 	printf(", Rev. %X, PCI-Async=%d MHz", rev, clock / 1000000);
 
-	if (s != NULL) {
+	if (i > 0) {
 		puts(", serial# ");
-		puts(s);
+		puts(buf);
 	}
 	putc('\n');
 
@@ -370,12 +359,12 @@ void board_pci_fixup_irq(struct pci_controller *hose, pci_dev_t dev)
 }
 #endif
 
-#if defined(CONFIG_NAND_U_BOOT) || defined(CONFIG_SYS_RAMBOOT)
+#if defined(CONFIG_SYS_RAMBOOT)
 /*
  * On NAND-booting sequoia, we need to patch the chips select numbers
  * in the dtb (CS0 - NAND, CS3 - NOR)
  */
-void ft_board_setup(void *blob, bd_t *bd)
+int ft_board_setup(void *blob, bd_t *bd)
 {
 	int rc;
 	int len;
@@ -393,15 +382,14 @@ void ft_board_setup(void *blob, bd_t *bd)
 	prop = fdt_get_property_w(blob, nodeoffset, "reg", &len);
 	if (prop == NULL) {
 		printf("Unable to update NOR chip select for NAND booting\n");
-		return;
+		return -FDT_ERR_NOTFOUND;
 	}
 	reg = (u32 *)&prop->data[0];
 	reg[0] = 3;
 	rc = fdt_find_and_setprop(blob, path, "reg", reg, 3 * sizeof(u32), 1);
 	if (rc) {
-		printf("Unable to update property NOR mappings, err=%s\n",
-		       fdt_strerror(rc));
-		return;
+		printf("Unable to update property NOR mappings\n");
+		return rc;
 	}
 
 	/* And now configure NAND chip select to 0 instead of 3 */
@@ -410,15 +398,16 @@ void ft_board_setup(void *blob, bd_t *bd)
 	prop = fdt_get_property_w(blob, nodeoffset, "reg", &len);
 	if (prop == NULL) {
 		printf("Unable to update NDFC chip select for NAND booting\n");
-		return;
+		return len;
 	}
 	reg = (u32 *)&prop->data[0];
 	reg[0] = 0;
 	rc = fdt_find_and_setprop(blob, path, "reg", reg, 3 * sizeof(u32), 1);
 	if (rc) {
-		printf("Unable to update property NDFC mappings, err=%s\n",
-		       fdt_strerror(rc));
-		return;
+		printf("Unable to update property NDFC mapping\n");
+		return rc;
 	}
+
+	return 0;
 }
-#endif /* CONFIG_NAND_U_BOOT */
+#endif /* CONFIG_SYS_RAMBOOT */

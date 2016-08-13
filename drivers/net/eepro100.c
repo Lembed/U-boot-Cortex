@@ -2,23 +2,7 @@
  * (C) Copyright 2002
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -242,12 +226,11 @@ static void purge_tx_ring (struct eth_device *dev);
 static void read_hw_addr (struct eth_device *dev, bd_t * bis);
 
 static int eepro100_init (struct eth_device *dev, bd_t * bis);
-static int eepro100_send (struct eth_device *dev, volatile void *packet,
-						  int length);
+static int eepro100_send(struct eth_device *dev, void *packet, int length);
 static int eepro100_recv (struct eth_device *dev);
 static void eepro100_halt (struct eth_device *dev);
 
-#if defined(CONFIG_E500) || defined(CONFIG_DB64360) || defined(CONFIG_DB64460)
+#if defined(CONFIG_E500)
 #define bus_to_phys(a) (a)
 #define phys_to_bus(a) (a)
 #else
@@ -257,23 +240,23 @@ static void eepro100_halt (struct eth_device *dev);
 
 static inline int INW (struct eth_device *dev, u_long addr)
 {
-	return le16_to_cpu (*(volatile u16 *) (addr + dev->iobase));
+	return le16_to_cpu(*(volatile u16 *)(addr + (u_long)dev->iobase));
 }
 
 static inline void OUTW (struct eth_device *dev, int command, u_long addr)
 {
-	*(volatile u16 *) ((addr + dev->iobase)) = cpu_to_le16 (command);
+	*(volatile u16 *)((addr + (u_long)dev->iobase)) = cpu_to_le16(command);
 }
 
 static inline void OUTL (struct eth_device *dev, int command, u_long addr)
 {
-	*(volatile u32 *) ((addr + dev->iobase)) = cpu_to_le32 (command);
+	*(volatile u32 *)((addr + (u_long)dev->iobase)) = cpu_to_le32(command);
 }
 
 #if defined(CONFIG_MII) || defined(CONFIG_CMD_MII)
 static inline int INL (struct eth_device *dev, u_long addr)
 {
-	return le32_to_cpu (*(volatile u32 *) (addr + dev->iobase));
+	return le32_to_cpu(*(volatile u32 *)(addr + (u_long)dev->iobase));
 }
 
 static int get_phyreg (struct eth_device *dev, unsigned char addr,
@@ -321,7 +304,8 @@ static int set_phyreg (struct eth_device *dev, unsigned char addr,
 /* Check if given phyaddr is valid, i.e. there is a PHY connected.
  * Do this by checking model value field from ID2 register.
  */
-static struct eth_device* verify_phyaddr (char *devname, unsigned char addr)
+static struct eth_device* verify_phyaddr (const char *devname,
+						unsigned char addr)
 {
 	struct eth_device *dev;
 	unsigned short value;
@@ -334,7 +318,7 @@ static struct eth_device* verify_phyaddr (char *devname, unsigned char addr)
 	}
 
 	/* read id2 register */
-	if (get_phyreg(dev, addr, PHY_PHYIDR2, &value) != 0) {
+	if (get_phyreg(dev, addr, MII_PHYSID2, &value) != 0) {
 		printf("%s: mii read timeout!\n", devname);
 		return NULL;
 	}
@@ -350,7 +334,7 @@ static struct eth_device* verify_phyaddr (char *devname, unsigned char addr)
 	return dev;
 }
 
-static int eepro100_miiphy_read (char *devname, unsigned char addr,
+static int eepro100_miiphy_read(const char *devname, unsigned char addr,
 		unsigned char reg, unsigned short *value)
 {
 	struct eth_device *dev;
@@ -367,7 +351,7 @@ static int eepro100_miiphy_read (char *devname, unsigned char addr,
 	return 0;
 }
 
-static int eepro100_miiphy_write (char *devname, unsigned char addr,
+static int eepro100_miiphy_write(const char *devname, unsigned char addr,
 		unsigned char reg, unsigned short value)
 {
 	struct eth_device *dev;
@@ -449,6 +433,11 @@ int eepro100_initialize (bd_t * bis)
 		}
 
 		dev = (struct eth_device *) malloc (sizeof *dev);
+		if (!dev) {
+			printf("eepro100: Can not allocate memory\n");
+			break;
+		}
+		memset(dev, 0, sizeof(*dev));
 
 		sprintf (dev->name, "i82559#%d", card_number);
 		dev->priv = (void *) devno; /* this have to come before bus_to_phys() */
@@ -602,7 +591,7 @@ static int eepro100_init (struct eth_device *dev, bd_t * bis)
 	return status;
 }
 
-static int eepro100_send (struct eth_device *dev, volatile void *packet, int length)
+static int eepro100_send(struct eth_device *dev, void *packet, int length)
 {
 	int i, status = -1;
 	int tx_cur;
@@ -685,7 +674,8 @@ static int eepro100_recv (struct eth_device *dev)
 			/* Pass the packet up to the protocol
 			 * layers.
 			 */
-			NetReceive (rx_ring[rx_next].data, length);
+			net_process_received_packet((u8 *)rx_ring[rx_next].data,
+						    length);
 		} else {
 			/* There was an error.
 			 */
@@ -917,7 +907,6 @@ static void purge_tx_ring (struct eth_device *dev)
 
 static void read_hw_addr (struct eth_device *dev, bd_t * bis)
 {
-	u16 eeprom[0x40];
 	u16 sum = 0;
 	int i, j;
 	int addr_len = read_eeprom (dev, 0, 6) == 0xffff ? 8 : 6;
@@ -925,7 +914,6 @@ static void read_hw_addr (struct eth_device *dev, bd_t * bis)
 	for (j = 0, i = 0; i < 0x40; i++) {
 		u16 value = read_eeprom (dev, i, addr_len);
 
-		eeprom[i] = value;
 		sum += value;
 		if (i < 3) {
 			dev->enetaddr[j++] = value;

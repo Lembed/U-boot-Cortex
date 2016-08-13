@@ -1,19 +1,7 @@
 /*
  * Copyright 2008 Extreme Engineering Solutions, Inc.
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * Version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0
  */
 
 /*
@@ -273,7 +261,7 @@ cmd_tbl_t cmd_ds4510[] = {
 #endif
 };
 
-int do_ds4510(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+int do_ds4510(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 	static uint8_t chip = CONFIG_SYS_I2C_DS4510_ADDR;
 	cmd_tbl_t *c;
@@ -294,8 +282,7 @@ int do_ds4510(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	if (!c || !((argc == (c->maxargs)) ||
 		(((int)c->cmd == DS4510_CMD_DEVICE) &&
 		 (argc == (c->maxargs - 1))))) {
-		cmd_usage(cmdtp);
-		return 1;
+		return cmd_usage(cmdtp);
 	}
 
 	/* arg2 used as chip addr and pin number */
@@ -366,14 +353,12 @@ int do_ds4510(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 
 #ifdef CONFIG_CMD_DS4510_MEM
 	/* Only eeprom, seeprom, and sram commands should make it here */
-	if (strcmp(argv[2], "read") == 0) {
+	if (strcmp(argv[2], "read") == 0)
 		rw_func = ds4510_mem_read;
-	} else if (strcmp(argv[2], "write") == 0) {
+	else if (strcmp(argv[2], "write") == 0)
 		rw_func = ds4510_mem_write;
-	} else {
-		cmd_usage(cmdtp);
-		return 1;
-	}
+	else
+		return cmd_usage(cmdtp);
 
 	addr = simple_strtoul(argv[3], NULL, 16);
 	off += simple_strtoul(argv[4], NULL, 16);

@@ -1,30 +1,18 @@
 /*
- * Copyright (C) 2006-2009 Freescale Semiconductor, Inc.
+ * Copyright (C) 2006-2010 Freescale Semiconductor, Inc.
  *
  * Dave Liu <daveliu@freescale.com>
  * based on source code of Shlomi Gridish
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __UEC_H__
 #define __UEC_H__
 
-#include "qe.h"
 #include "uccf.h"
+#include <fsl_qe.h>
+#include <phy.h>
 
 #define MAX_TX_THREADS				8
 #define MAX_RX_THREADS				8
@@ -660,21 +648,6 @@ typedef enum uec_num_of_threads {
 	UEC_NUM_OF_THREADS_8  = 0x4   /* 8 */
 } uec_num_of_threads_e;
 
-/* UEC ethernet interface type
-*/
-typedef enum enet_interface_type {
-	MII,
-	RMII,
-	RGMII,
-	GMII,
-	RGMII_ID,
-	RGMII_RXID,
-	RGMII_TXID,
-	TBI,
-	RTBI,
-	SGMII
-} enet_interface_type_e;
-
 /* UEC initialization info struct
 */
 #define STD_UEC_INFO(num) \
@@ -705,7 +678,7 @@ typedef struct uec_info {
 	u16				rx_bd_ring_len;
 	u16				tx_bd_ring_len;
 	u8				phy_address;
-	enet_interface_type_e		enet_interface_type;
+	phy_interface_t			enet_interface_type;
 	int				speed;
 } uec_info_t;
 

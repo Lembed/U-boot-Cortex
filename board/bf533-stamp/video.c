@@ -150,6 +150,12 @@ static void video_init(char *NTSCFrame)
 	bfin_write_PPI_CONTROL(0x0083);
 }
 
+void video_stop(void)
+{
+	bfin_write_PPI_CONTROL(0);
+	bfin_write_DMA0_CONFIG(0);
+}
+
 int drv_video_init(void)
 {
 	struct stdio_dev videodev;
@@ -158,8 +164,6 @@ int drv_video_init(void)
 
 	memset(&videodev, 0, sizeof(videodev));
 	strcpy(videodev.name, "video");
-	videodev.ext = DEV_EXT_VIDEO;
-	videodev.flags = DEV_FLAGS_SYSTEM;
 
 	return stdio_register(&videodev);
 }

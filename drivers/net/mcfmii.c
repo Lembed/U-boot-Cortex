@@ -2,23 +2,7 @@
  * Copyright (C) 2004-2008 Freescale Semiconductor, Inc.
  * TsiChung Liew (Tsi-Chung.Liew@freescale.com)
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -29,16 +13,13 @@
 #ifdef CONFIG_MCF547x_8x
 #include <asm/fsl_mcdmafec.h>
 #else
-#include "fec.h"
+#include <asm/fec.h>
 #endif
-
-#ifdef CONFIG_M68K
 #include <asm/immap.h>
-#endif
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#if defined(CONFIG_CMD_NET) && defined(CONFIG_NET_MULTI)
+#if defined(CONFIG_CMD_NET)
 #undef MII_DEBUG
 #undef ET_DEBUG
 
@@ -59,12 +40,6 @@ DECLARE_GLOBAL_DATA_PTR;
 #ifndef CONFIG_SYS_UNSPEC_STRID
 #	define CONFIG_SYS_UNSPEC_STRID		0
 #endif
-
-/*
- * The MSCR[MII_SPEED] bit field consists of 6 bits, therefore the maximum
- * possible value for this field is 63.
- */
-#define MCFFEC_MII_SPEED_MAX	63
 
 #ifdef CONFIG_MCF547x_8x
 typedef struct fec_info_dma FEC_INFO_T;
@@ -89,7 +64,6 @@ phy_info_t phyinfo[] = {
 	{0x001378e0, "LXT971"},		/* LXT971 and 972 */
 	{0x00221619, "KS8721BL"},	/* Micrel KS8721BL/SL */
 	{0x00221512, "KSZ8041NL"},	/* Micrel KSZ8041NL */
-	{0x00221430, "KSZ8863"},	/* Micrel KSZ8863 MLL/FLL/RLL */
 	{0x20005CE1, "N83640"},		/* National 83640 */
 	{0x20005C90, "N83848"},		/* National 83848 */
 	{0x20005CA2, "N83849"},		/* National 83849 */
@@ -181,42 +155,43 @@ int mii_discover_phy(struct eth_device *dev)
 
 		for (phyno = 0; phyno < 32 && phyaddr < 0; ++phyno) {
 
-			phytype = mii_send(mk_mii_read(phyno, PHY_PHYIDR1));
+			phytype = mii_send(mk_mii_read(phyno, MII_PHYSID1));
 #ifdef ET_DEBUG
 			printf("PHY type 0x%x pass %d type\n", phytype, pass);
 #endif
-			if (phytype != 0xffff && phytype != 0) {
-				phyaddr = phyno;
-				phytype <<= 16;
-				phytype |=
-				    mii_send(mk_mii_read(phyno, PHY_PHYIDR2));
+			if (phytype == 0xffff)
+				continue;
+			phyaddr = phyno;
+			phytype <<= 16;
+			phytype |=
+			    mii_send(mk_mii_read(phyno, MII_PHYSID2));
 
 #ifdef ET_DEBUG
-				printf("PHY @ 0x%x pass %d\n", phyno, pass);
+			printf("PHY @ 0x%x pass %d\n", phyno, pass);
 #endif
 
-				for (i = 0; i < (sizeof(phyinfo) / sizeof(phy_info_t)); i++) {
-					if (phyinfo[i].phyid == phytype) {
+			for (i = 0; (i < ARRAY_SIZE(phyinfo))
+				&& (phyinfo[i].phyid != 0); i++) {
+				if (phyinfo[i].phyid == phytype) {
 #ifdef ET_DEBUG
-						printf("phyid %x - %s\n",
-						       phyinfo[i].phyid,
-						       phyinfo[i].strid);
+					printf("phyid %x - %s\n",
+					       phyinfo[i].phyid,
+					       phyinfo[i].strid);
 #endif
-						strcpy(info->phy_name, phyinfo[i].strid);
-						info->phyname_init = 1;
-						found = 1;
-						break;
-					}
-				}
-
-				if (!found) {
-#ifdef ET_DEBUG
-					printf("0x%08x\n", phytype);
-#endif
-					strcpy(info->phy_name, "unknown");
+					strcpy(info->phy_name, phyinfo[i].strid);
 					info->phyname_init = 1;
+					found = 1;
 					break;
 				}
+			}
+
+			if (!found) {
+#ifdef ET_DEBUG
+				printf("0x%08x\n", phytype);
+#endif
+				strcpy(info->phy_name, "unknown");
+				info->phyname_init = 1;
+				break;
 			}
 		}
 	}
@@ -256,22 +231,7 @@ void __mii_init(void)
 	fecp->eir = 0xffffffff;
 
 	/* Set MII speed */
-#ifdef CONFIG_M68K
 	miispd = (gd->bus_clk / 1000000) / 5;
-#else
-	/*
-	 * The MSCR[MII_SPEED] bit field is minus 1 encoded.
-	 *
-	 * We round the value in MSCR[MII_SPEED] up, so that the MDC frequency
-	 * never exceeds CONFIG_MCFFEC_MII_SPEED_LIMIT.
-	 */
-	miispd =
-		(CONFIG_MCFFEC_MAC_CLK - 1) /
-		(2 * CONFIG_MCFFEC_MII_SPEED_LIMIT);
-#endif /* CONFIG_M68K */
-	if (miispd > MCFFEC_MII_SPEED_MAX)
-		miispd = MCFFEC_MII_SPEED_MAX;
-
 	fecp->mscr = miispd << 1;
 
 	info->phy_addr = mii_discover_phy(dev);
@@ -280,18 +240,18 @@ void __mii_init(void)
 		status = 0;
 		i++;
 		/* Read PHY control register */
-		miiphy_read(dev->name, info->phy_addr, PHY_BMCR, &status);
+		miiphy_read(dev->name, info->phy_addr, MII_BMCR, &status);
 
 		/* If phy set to autonegotiate, wait for autonegotiation done,
 		 * if phy is not autonegotiating, just wait for link up.
 		 */
-		if ((status & PHY_BMCR_AUTON) == PHY_BMCR_AUTON) {
-			linkgood = (PHY_BMSR_AUTN_COMP | PHY_BMSR_LS);
+		if ((status & BMCR_ANENABLE) == BMCR_ANENABLE) {
+			linkgood = (BMSR_ANEGCOMPLETE | BMSR_LSTATUS);
 		} else {
-			linkgood = PHY_BMSR_LS;
+			linkgood = BMSR_LSTATUS;
 		}
 		/* Read PHY status register */
-		miiphy_read(dev->name, info->phy_addr, PHY_BMSR, &status);
+		miiphy_read(dev->name, info->phy_addr, MII_BMSR, &status);
 		if ((status & linkgood) == linkgood)
 			break;
 
@@ -317,7 +277,7 @@ void __mii_init(void)
  *	  Otherwise they hang in mii_send() !!! Sorry!
  */
 
-int mcffec_miiphy_read(char *devname, unsigned char addr, unsigned char reg,
+int mcffec_miiphy_read(const char *devname, unsigned char addr, unsigned char reg,
 		       unsigned short *value)
 {
 	short rdreg;		/* register working value */
@@ -336,16 +296,14 @@ int mcffec_miiphy_read(char *devname, unsigned char addr, unsigned char reg,
 	return 0;
 }
 
-int mcffec_miiphy_write(char *devname, unsigned char addr, unsigned char reg,
+int mcffec_miiphy_write(const char *devname, unsigned char addr, unsigned char reg,
 			unsigned short value)
 {
-	short rdreg;		/* register working value */
-
 #ifdef MII_DEBUG
 	printf("miiphy_write(0x%x) @ 0x%x = ", reg, addr);
 #endif
 
-	rdreg = mii_send(mk_mii_write(addr, reg, value));
+	mii_send(mk_mii_write(addr, reg, value));
 
 #ifdef MII_DEBUG
 	printf("0x%04x\n", value);
@@ -354,4 +312,4 @@ int mcffec_miiphy_write(char *devname, unsigned char addr, unsigned char reg,
 	return 0;
 }
 
-#endif				/* CONFIG_CMD_NET, FEC_ENET & NET_MULTI */
+#endif				/* CONFIG_CMD_NET */

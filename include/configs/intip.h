@@ -6,20 +6,7 @@
  * (C) Copyright 2008
  * Stefan Roese, DENX Software Engineering, sr@denx.de.
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -37,13 +24,16 @@
 #define CONFIG_460EX		1	/* Specific PPC460EX		*/
 #ifdef CONFIG_DEVCONCENTER
 #define CONFIG_HOSTNAME		devconcenter
-#define CONFIG_IDENT_STRING	" devconcenter 0.02"
+#define CONFIG_IDENT_STRING	" devconcenter 0.06"
 #else
 #define CONFIG_HOSTNAME		intip
-#define CONFIG_IDENT_STRING	" intip 0.02"
+#define CONFIG_IDENT_STRING	" intip 0.06"
 #endif
 #define CONFIG_440		1
-#define CONFIG_4xx		1	/* ... PPC4xx family */
+
+#ifndef CONFIG_SYS_TEXT_BASE
+#define CONFIG_SYS_TEXT_BASE	0xFFFA0000
+#endif
 
 /*
  * Include common defines/options for all AMCC eval boards
@@ -56,7 +46,6 @@
 #define CONFIG_BOARD_EARLY_INIT_R	1	/* Call board_early_init_r */
 #define CONFIG_MISC_INIT_R		1	/* Call misc_init_r */
 #define CONFIG_BOARD_TYPES		1	/* support board types */
-#define CONFIG_FIT
 #define CFG_ALT_MEMTEST
 
 /*
@@ -93,9 +82,8 @@
 
 #define CONFIG_SYS_OCM_BASE		0xE3000000	/* OCM: 64k */
 #define CONFIG_SYS_SRAM_BASE		0xE8000000	/* SRAM: 256k */
+#define CONFIG_SYS_SRAM_SIZE		(256 << 10)
 #define CONFIG_SYS_LOCAL_CONF_REGS	0xEF000000
-
-#define CONFIG_SYS_PERIPHERAL_BASE	0xEF600000	/* internal periph. */
 
 #define CONFIG_SYS_AHB_BASE		0xE2000000	/* int. AHB periph. */
 
@@ -103,16 +91,15 @@
  * Initial RAM & stack pointer (placed in OCM)
  */
 #define CONFIG_SYS_INIT_RAM_ADDR	CONFIG_SYS_OCM_BASE	/* OCM */
-#define CONFIG_SYS_INIT_RAM_END	(4 << 10)
-#define CONFIG_SYS_GBL_DATA_SIZE	256	/* num bytes initial data */
+#define CONFIG_SYS_INIT_RAM_SIZE	(4 << 10)
 #define CONFIG_SYS_GBL_DATA_OFFSET \
-	(CONFIG_SYS_INIT_RAM_END - CONFIG_SYS_GBL_DATA_SIZE)
+	(CONFIG_SYS_INIT_RAM_SIZE - GENERATED_GBL_DATA_SIZE)
 #define CONFIG_SYS_INIT_SP_OFFSET	CONFIG_SYS_GBL_DATA_OFFSET
 
 /*
  * Serial Port
  */
-#undef CONFIG_UART1_CONSOLE	/* define this if you want console on UART1 */
+#define CONFIG_CONS_INDEX	1	/* Use UART0			*/
 
 /*
  * Environment
@@ -194,13 +181,13 @@
 #define CONFIG_SYS_SDRAM0_INITPLR2	0x81020000
 #define CONFIG_SYS_SDRAM0_INITPLR3	0x81030000
 #define CONFIG_SYS_SDRAM0_INITPLR4	0x81010002
-#define CONFIG_SYS_SDRAM0_INITPLR5	0xE4000542
+#define CONFIG_SYS_SDRAM0_INITPLR5	0xE4000552
 #define CONFIG_SYS_SDRAM0_INITPLR6	0x81900400
 #define CONFIG_SYS_SDRAM0_INITPLR7	0x8A880000
 #define CONFIG_SYS_SDRAM0_INITPLR8	0x8A880000
 #define CONFIG_SYS_SDRAM0_INITPLR9	0x8A880000
 #define CONFIG_SYS_SDRAM0_INITPLR10	0x8A880000
-#define CONFIG_SYS_SDRAM0_INITPLR11	0x81000442
+#define CONFIG_SYS_SDRAM0_INITPLR11	0x81000452
 #define CONFIG_SYS_SDRAM0_INITPLR12	0x81010382
 #define CONFIG_SYS_SDRAM0_INITPLR13	0x81010002
 #define CONFIG_SYS_SDRAM0_INITPLR14	0x00000000
@@ -210,11 +197,11 @@
 #define CONFIG_SYS_SDRAM0_RDCC		0x40000000
 #define CONFIG_SYS_SDRAM0_DLCR		0x00000000
 #define CONFIG_SYS_SDRAM0_CLKTR		0x40000000
-#define CONFIG_SYS_SDRAM0_WRDTR		0x84000823
+#define CONFIG_SYS_SDRAM0_WRDTR		0x86000823
 #define CONFIG_SYS_SDRAM0_SDTR1		0x80201000
 #define CONFIG_SYS_SDRAM0_SDTR2		0x32204232
 #define CONFIG_SYS_SDRAM0_SDTR3		0x090C0D15
-#define CONFIG_SYS_SDRAM0_MMODE		0x00000442
+#define CONFIG_SYS_SDRAM0_MMODE		0x00000452
 #define CONFIG_SYS_SDRAM0_MEMODE	0x00000002
 
 #define CONFIG_SYS_MBYTES_SDRAM	256	/* 256MB */
@@ -222,9 +209,8 @@
 /*
  * I2C
  */
-#define CONFIG_SYS_I2C_SPEED		400000	/* I2C speed */
+#define CONFIG_SYS_I2C_PPC4XX_SPEED_0		400000
 
-#define CONFIG_SYS_I2C_MULTI_EEPROMS
 #define CONFIG_SYS_I2C_EEPROM_ADDR		(0xa8>>1)
 #define CONFIG_SYS_I2C_EEPROM_ADDR_LEN		1
 #define CONFIG_SYS_EEPROM_PAGE_WRITE_BITS	3
@@ -293,12 +279,8 @@
 #define CONFIG_CMD_CHIP_CONFIG
 #define CONFIG_CMD_DATE
 #define CONFIG_CMD_DTT
-#define CONFIG_CMD_EXT2
-#define CONFIG_CMD_FAT
 #define CONFIG_CMD_PCI
 #define CONFIG_CMD_SDRAM
-#define CONFIG_CMD_SNTP
-#define CONFIG_CMD_USB
 
 /* Partitions */
 #define CONFIG_MAC_PARTITION
@@ -310,6 +292,7 @@
  */
 /* General PCI */
 #define CONFIG_PCI			/* include pci support	        */
+#define CONFIG_PCI_INDIRECT_BRIDGE	/* indirect PCI bridge support */
 #define CONFIG_PCI_PNP			/* do pci plug-and-play   */
 #define CONFIG_PCI_SCAN_SHOW		/* show pci devices on startup  */
 #define CONFIG_PCI_CONFIG_HOST_BRIDGE
@@ -321,7 +304,6 @@
 
 #define CONFIG_SYS_PCI_SUBSYS_VENDORID 0x1014	/* IBM */
 #define CONFIG_SYS_PCI_SUBSYS_DEVICEID 0xcafe	/* Whatever */
-
 
 /*
  * External Bus Controller (EBC) Setup
@@ -336,7 +318,6 @@
  *
  * 0xfc00.0000 -> 4.cc00.0000
  */
-
 
 /* Memory Bank 0 (NOR-FLASH) initialization */
 #define CONFIG_SYS_EBC_PB0AP		0x10055e00

@@ -6,24 +6,11 @@
  * (C) Copyright 2008
  * Stefan Roese, DENX Software Engineering, sr@denx.de.
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <ppc440.h>
+#include <asm/ppc440.h>
 #include <libfdt.h>
 #include <fdt_support.h>
 #include <i2c.h>
@@ -31,7 +18,7 @@
 #include <asm/io.h>
 #include <asm/mmu.h>
 #include <asm/4xx_pcie.h>
-#include <asm/gpio.h>
+#include <asm/ppc4xx-gpio.h>
 
 extern flash_info_t flash_info[CONFIG_SYS_MAX_FLASH_BANKS];
 
@@ -124,7 +111,8 @@ int get_cpu_num(void)
 
 int checkboard(void)
 {
-	char *s = getenv("serial#");
+	char buf[64];
+	int i = getenv_f("serial#", buf, sizeof(buf));
 
 #ifdef CONFIG_DEVCONCENTER
 	printf("Board: DevCon-Center");
@@ -132,9 +120,9 @@ int checkboard(void)
 	printf("Board: Intip");
 #endif
 
-	if (s != NULL) {
+	if (i > 0) {
 		puts(", serial# ");
-		puts(s);
+		puts(buf);
 	}
 	putc('\n');
 
@@ -215,10 +203,10 @@ int misc_init_r(void)
 	return 0;
 }
 
-#if defined(CONFIG_OF_LIBFDT) && defined(CONFIG_OF_BOARD_SETUP)
+#ifdef CONFIG_OF_BOARD_SETUP
 extern void __ft_board_setup(void *blob, bd_t *bd);
 
-void ft_board_setup(void *blob, bd_t *bd)
+int ft_board_setup(void *blob, bd_t *bd)
 {
 	__ft_board_setup(blob, bd);
 
@@ -227,5 +215,7 @@ void ft_board_setup(void *blob, bd_t *bd)
 
 	fdt_find_and_setprop(blob, "/plb/sata@bffd1000", "status",
 			     "disabled", sizeof("disabled"), 1);
+
+	return 0;
 }
-#endif /* defined(CONFIG_OF_LIBFDT) && defined(CONFIG_OF_BOARD_SETUP) */
+#endif /* CONFIG_OF_BOARD_SETUP */

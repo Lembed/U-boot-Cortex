@@ -5,23 +5,7 @@
  * (C) Copyright 2001
  * Gerald Van Baren, Custom IDEAS, vanbaren@cideas.com.
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -127,7 +111,7 @@ void bb_miiphy_init(void)
 	int i;
 
 	for (i = 0; i < bb_miiphy_buses_num; i++) {
-#if !defined(CONFIG_RELOC_FIXUP_WORKS)
+#if defined(CONFIG_NEEDS_MANUAL_RELOC)
 		/* Relocate the hook pointers*/
 		BB_MII_RELOCATE(bb_miiphy_buses[i].init, gd->reloc_off);
 		BB_MII_RELOCATE(bb_miiphy_buses[i].mdio_active, gd->reloc_off);
@@ -143,7 +127,7 @@ void bb_miiphy_init(void)
 	}
 }
 
-static inline struct bb_miiphy_bus *bb_miiphy_getbus(char *devname)
+static inline struct bb_miiphy_bus *bb_miiphy_getbus(const char *devname)
 {
 #ifdef CONFIG_BITBANGMII_MULTI
 	int i;
@@ -246,7 +230,7 @@ static void miiphy_pre(struct bb_miiphy_bus *bus, char read,
  * Returns:
  *   0 on success
  */
-int bb_miiphy_read(char *devname, unsigned char addr,
+int bb_miiphy_read(const char *devname, unsigned char addr,
 		   unsigned char reg, unsigned short *value)
 {
 	short rdreg; /* register working value */
@@ -327,7 +311,7 @@ int bb_miiphy_read(char *devname, unsigned char addr,
  * Returns:
  *   0 on success
  */
-int bb_miiphy_write (char *devname, unsigned char addr,
+int bb_miiphy_write (const char *devname, unsigned char addr,
 		     unsigned char reg, unsigned short value)
 {
 	struct bb_miiphy_bus *bus;

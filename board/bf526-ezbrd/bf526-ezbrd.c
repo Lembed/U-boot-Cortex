@@ -1,5 +1,5 @@
 /*
- * U-boot - main board file
+ * U-Boot - main board file
  *
  * Copyright (c) 2005-2009 Analog Devices Inc.
  *
@@ -12,7 +12,6 @@
 #include <net.h>
 #include <netdev.h>
 #include <asm/blackfin.h>
-#include <asm/net.h>
 #include <asm/mach-common/bits/otp.h>
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -27,29 +26,14 @@ int checkboard(void)
 #ifdef CONFIG_BFIN_MAC
 static void board_init_enetaddr(uchar *mac_addr)
 {
-	bool valid_mac = false;
-
-	/* the MAC is stored in OTP memory page 0xDF */
-	uint32_t ret;
-	uint64_t otp_mac;
-
-	ret = bfrom_OtpRead(0xDF, OTP_LOWER_HALF, &otp_mac);
-	if (!(ret & OTP_MASTER_ERROR)) {
-		uchar *otp_mac_p = (uchar *)&otp_mac;
-
-		for (ret = 0; ret < 6; ++ret)
-			mac_addr[ret] = otp_mac_p[5 - ret];
-
-		if (is_valid_ether_addr(mac_addr))
-			valid_mac = true;
+#ifndef CONFIG_SYS_NO_FLASH
+	/* we cram the MAC in the last flash sector */
+	uchar *board_mac_addr = (uchar *)0x203F0096;
+	if (is_valid_ethaddr(board_mac_addr)) {
+		memcpy(mac_addr, board_mac_addr, 6);
+		eth_setenv_enetaddr("ethaddr", mac_addr);
 	}
-
-	if (!valid_mac) {
-		puts("Warning: Generating 'random' MAC address\n");
-		bfin_gen_rand_mac(mac_addr);
-	}
-
-	eth_setenv_enetaddr("ethaddr", mac_addr);
+#endif
 }
 
 int board_eth_init(bd_t *bis)
@@ -64,6 +48,12 @@ int misc_init_r(void)
 	uchar enetaddr[6];
 	if (!eth_getenv_enetaddr("ethaddr", enetaddr))
 		board_init_enetaddr(enetaddr);
+#endif
+
+#ifndef CONFIG_SYS_NO_FLASH
+	/* we use the last sector for the MAC address / POST LDR */
+	extern flash_info_t flash_info[];
+	flash_protect(FLAG_PROTECT_SET, 0x203F0000, 0x203FFFFF, &flash_info[0]);
 #endif
 
 	return 0;

@@ -2,24 +2,11 @@
  * (C) Copyright 2008
  * Stefan Roese, DENX Software Engineering, sr@denx.de.
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <ppc440.h>
+#include <asm/ppc440.h>
 #include <libfdt.h>
 #include <fdt_support.h>
 #include <i2c.h>
@@ -27,14 +14,25 @@
 #include <asm/io.h>
 #include <asm/mmu.h>
 #include <asm/4xx_pcie.h>
-#include <asm/gpio.h>
+#include <asm/ppc4xx-gpio.h>
 #include <asm/errno.h>
+#include <usb.h>
 
 extern flash_info_t flash_info[CONFIG_SYS_MAX_FLASH_BANKS]; /* info for FLASH chips */
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#define CONFIG_SYS_BCSR3_PCIE		0x10
+struct board_bcsr {
+	u8	board_id;
+	u8	cpld_rev;
+	u8	led_user;
+	u8	board_status;
+	u8	reset_ctrl;
+	u8	flash_ctrl;
+	u8	eth_ctrl;
+	u8	usb_ctrl;
+	u8	irq_ctrl;
+};
 
 #define BOARD_CANYONLANDS_PCIE	1
 #define BOARD_CANYONLANDS_SATA	2
@@ -42,7 +40,7 @@ DECLARE_GLOBAL_DATA_PTR;
 #define BOARD_ARCHES		4
 
 /*
- * Override the default functions in cpu/ppc4xx/44x_spd_ddr2.c with
+ * Override the default functions in arch/powerpc/cpu/ppc4xx/44x_spd_ddr2.c with
  * board specific values.
  */
 #if defined(CONFIG_ARCHES)
@@ -112,6 +110,9 @@ int board_early_init_f(void)
 {
 #if !defined(CONFIG_ARCHES)
 	u32 sdr0_cust0;
+	struct board_bcsr *bcsr_data =
+		(struct board_bcsr *)CONFIG_SYS_BCSR_BASE;
+
 #endif
 
 	/*
@@ -172,34 +173,68 @@ int board_early_init_f(void)
 
 #if !defined(CONFIG_ARCHES)
 	/* Enable ethernet and take out of reset */
-	out_8((void *)CONFIG_SYS_BCSR_BASE + 6, 0);
+	out_8(&bcsr_data->eth_ctrl, 0) ;
 
 	/* Remove NOR-FLASH, NAND-FLASH & EEPROM hardware write protection */
-	out_8((void *)CONFIG_SYS_BCSR_BASE + 5, 0);
-
-	/* Enable USB host & USB-OTG */
-	out_8((void *)CONFIG_SYS_BCSR_BASE + 7, 0);
-
+	out_8(&bcsr_data->flash_ctrl, 0) ;
 	mtsdr(SDR0_SRST1, 0);	/* Pull AHB out of reset default=1 */
 
 	/* Setup PLB4-AHB bridge based on the system address map */
 	mtdcr(AHB_TOP, 0x8000004B);
 	mtdcr(AHB_BOT, 0x8000004B);
 
-	if (pvr_460ex()) {
-		/*
-		 * Configure USB-STP pins as alternate and not GPIO
-		 * It seems to be neccessary to configure the STP pins as GPIO
-		 * input at powerup (perhaps while USB reset is asserted). So
-		 * we configure those pins to their "real" function now.
-		 */
-		gpio_config(16, GPIO_OUT, GPIO_ALT1, GPIO_OUT_1);
-		gpio_config(19, GPIO_OUT, GPIO_ALT1, GPIO_OUT_1);
-	}
 #endif
 
 	return 0;
 }
+
+#if defined(CONFIG_USB_OHCI_NEW) && defined(CONFIG_SYS_USB_OHCI_BOARD_INIT)
+int board_usb_init(int index, enum usb_init_type init)
+{
+	struct board_bcsr *bcsr_data =
+		(struct board_bcsr *)CONFIG_SYS_BCSR_BASE;
+	u8 val;
+
+	/* Enable USB host & USB-OTG */
+	val = in_8(&bcsr_data->usb_ctrl);
+	val &= ~(BCSR_USBCTRL_OTG_RST | BCSR_USBCTRL_HOST_RST);
+	out_8(&bcsr_data->usb_ctrl, val);
+
+	/*
+	 * Configure USB-STP pins as alternate and not GPIO
+	 * It seems to be neccessary to configure the STP pins as GPIO
+	 * input at powerup (perhaps while USB reset is asserted). So
+	 * we configure those pins to their "real" function now.
+	 */
+	gpio_config(16, GPIO_OUT, GPIO_ALT1, GPIO_OUT_1);
+	gpio_config(19, GPIO_OUT, GPIO_ALT1, GPIO_OUT_1);
+
+	return 0;
+}
+
+int usb_board_stop(void)
+{
+	struct board_bcsr *bcsr_data =
+		(struct board_bcsr *)CONFIG_SYS_BCSR_BASE;
+	u8 val;
+
+	/* Disable USB host & USB-OTG */
+	val = in_8(&bcsr_data->usb_ctrl);
+	val |= (BCSR_USBCTRL_OTG_RST | BCSR_USBCTRL_HOST_RST);
+	out_8(&bcsr_data->usb_ctrl, val);
+
+	/* Reconfigure USB-STP pins as input */
+	gpio_config(16, GPIO_IN , GPIO_SEL, GPIO_OUT_0);
+	gpio_config(19, GPIO_IN , GPIO_SEL, GPIO_OUT_0);
+
+	return 0;
+}
+
+int board_usb_cleanup(int index, enum usb_init_type init)
+{
+	return usb_board_stop();
+}
+#endif /* CONFIG_USB_OHCI_NEW && CONFIG_SYS_USB_OHCI_BOARD_INIT */
 
 #if !defined(CONFIG_ARCHES)
 static void canyonlands_sata_init(int board_type)
@@ -244,11 +279,14 @@ int get_cpu_num(void)
 #if !defined(CONFIG_ARCHES)
 int checkboard(void)
 {
-	char *s = getenv("serial#");
+	struct board_bcsr *bcsr_data =
+		(struct board_bcsr *)CONFIG_SYS_BCSR_BASE;
+	char buf[64];
+	int i = getenv_f("serial#", buf, sizeof(buf));
 
 	if (pvr_460ex()) {
 		printf("Board: Canyonlands - AMCC PPC460EX Evaluation Board");
-		if (in_8((void *)(CONFIG_SYS_BCSR_BASE + 3)) & CONFIG_SYS_BCSR3_PCIE)
+		if (in_8(&bcsr_data->board_status) & BCSR_SELECT_PCIE)
 			gd->board_type = BOARD_CANYONLANDS_PCIE;
 		else
 			gd->board_type = BOARD_CANYONLANDS_SATA;
@@ -268,11 +306,11 @@ int checkboard(void)
 		break;
 	}
 
-	printf(", Rev. %X", in_8((void *)(CONFIG_SYS_BCSR_BASE + 0)));
+	printf(", Rev. %X", in_8(&bcsr_data->cpld_rev));
 
-	if (s != NULL) {
+	if (i > 0) {
 		puts(", serial# ");
-		puts(s);
+		puts(buf);
 	}
 	putc('\n');
 
@@ -314,18 +352,6 @@ int checkboard(void)
 }
 #endif	/* !defined(CONFIG_ARCHES) */
 
-#if defined(CONFIG_NAND_U_BOOT)
-/*
- * NAND booting U-Boot version uses a fixed initialization, since the whole
- * I2C SPD DIMM autodetection/calibration doesn't fit into the 4k of boot
- * code.
- */
-phys_size_t initdram(int board_type)
-{
-	return CONFIG_SYS_MBYTES_SDRAM << 20;
-}
-#endif
-
 #if defined(CONFIG_PCI)
 int board_pcie_first(void)
 {
@@ -353,11 +379,7 @@ int board_early_init_r (void)
 	 */
 
 	/* Remap the NOR FLASH to 0xcc00.0000 ... 0xcfff.ffff */
-#if defined(CONFIG_NAND_U_BOOT) || defined(CONFIG_NAND_SPL)
-	mtebc(PB3CR, CONFIG_SYS_FLASH_BASE_PHYS_L | 0xda000);
-#else
 	mtebc(PB0CR, CONFIG_SYS_FLASH_BASE_PHYS_L | 0xda000);
-#endif
 
 	/* Remove TLB entry of boot EBC mapping */
 	remove_tlb(CONFIG_SYS_BOOT_BASE_ADDR, 16 << 20);
@@ -467,10 +489,10 @@ int misc_init_r(void)
 }
 #endif	/* !defined(CONFIG_ARCHES) */
 
-#if defined(CONFIG_OF_LIBFDT) && defined(CONFIG_OF_BOARD_SETUP)
-extern void __ft_board_setup(void *blob, bd_t *bd);
+#ifdef CONFIG_OF_BOARD_SETUP
+extern int __ft_board_setup(void *blob, bd_t *bd);
 
-void ft_board_setup(void *blob, bd_t *bd)
+int ft_board_setup(void *blob, bd_t *bd)
 {
 	__ft_board_setup(blob, bd);
 
@@ -493,5 +515,7 @@ void ft_board_setup(void *blob, bd_t *bd)
 		fdt_find_and_setprop(blob, "/plb/sata@bffd1000", "status",
 				     "disabled", sizeof("disabled"), 1);
 	}
+
+	return 0;
 }
-#endif /* defined(CONFIG_OF_LIBFDT) && defined(CONFIG_OF_BOARD_SETUP) */
+#endif /* CONFIG_OF_BOARD_SETUP */

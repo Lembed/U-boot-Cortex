@@ -4,23 +4,7 @@
  * Copyright (C) 2004-2008 Freescale Semiconductor, Inc.
  * TsiChung Liew (Tsi-Chung.Liew@freescale.com)
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -34,14 +18,13 @@
  * High Level Configuration Options
  * (easy to change)
  */
-#define CONFIG_MCF5445x		/* define processor family */
-#define CONFIG_M54451		/* define processor type */
 #define CONFIG_M54451EVB	/* M54451EVB board */
+
+#define CONFIG_DISPLAY_BOARDINFO
 
 #define CONFIG_MCFUART
 #define CONFIG_SYS_UART_PORT		(0)
 #define CONFIG_BAUDRATE		115200
-#define CONFIG_SYS_BAUDRATE_TABLE	{ 9600 , 19200 , 38400 , 57600, 115200 }
 
 #undef CONFIG_WATCHDOG
 
@@ -56,33 +39,13 @@
 #define CONFIG_BOOTP_HOSTNAME
 
 /* Command line configuration */
-#include <config_cmd_default.h>
-
-#define CONFIG_CMD_BOOTD
-#define CONFIG_CMD_CACHE
 #define CONFIG_CMD_DATE
-#define CONFIG_CMD_DHCP
-#define CONFIG_CMD_ELF
-#define CONFIG_CMD_FLASH
-#define CONFIG_CMD_I2C
 #undef CONFIG_CMD_JFFS2
-#define CONFIG_CMD_MEMORY
-#define CONFIG_CMD_MISC
-#define CONFIG_CMD_MII
-#define CONFIG_CMD_NET
-#define CONFIG_CMD_NFS
-#define CONFIG_CMD_PING
 #define CONFIG_CMD_REGINFO
-#define CONFIG_CMD_SPI
-#define CONFIG_CMD_SF
-
-#undef CONFIG_CMD_LOADB
-#undef CONFIG_CMD_LOADS
 
 /* Network configuration */
 #define CONFIG_MCFFEC
 #ifdef CONFIG_MCFFEC
-#	define CONFIG_NET_MULTI		1
 #	define CONFIG_MII		1
 #	define CONFIG_MII_INIT		1
 #	define CONFIG_SYS_DISCOVER_PHY
@@ -93,15 +56,12 @@
 #	define CONFIG_SYS_FEC0_MIIBASE	CONFIG_SYS_FEC0_IOBASE
 #	define MCFFEC_TOUT_LOOP 50000
 
-#	define CONFIG_BOOTDELAY	1	/* autoboot after 5 seconds */
 #	define CONFIG_BOOTARGS		"root=/dev/mtdblock1 rw rootfstype=jffs2 ip=none mtdparts=physmap-flash.0:2M(kernel)ro,-(jffs2)"
-#	define CONFIG_ETHADDR		00:e0:0c:bc:e5:60
 #	define CONFIG_ETHPRIME		"FEC0"
 #	define CONFIG_IPADDR		192.162.1.2
 #	define CONFIG_NETMASK		255.255.255.0
 #	define CONFIG_SERVERIP		192.162.1.1
 #	define CONFIG_GATEWAYIP		192.162.1.1
-#	define CONFIG_OVERWRITE_ETHADDR_ONCE
 
 /* If CONFIG_SYS_DISCOVER_PHY is not defined - hardcoded */
 #	ifndef CONFIG_SYS_DISCOVER_PHY
@@ -120,14 +80,14 @@
 #define	CONFIG_SYS_LOAD_ADDR2		0x40010007
 #define CONFIG_EXTRA_ENV_SETTINGS		\
 	"netdev=eth0\0"				\
-	"inpclk=" MK_STR(CONFIG_SYS_INPUT_CLKSRC) "\0"	\
+	"inpclk=" __stringify(CONFIG_SYS_INPUT_CLKSRC) "\0"	\
 	"loadaddr=0x40010000\0"			\
 	"sbfhdr=sbfhdr.bin\0"			\
 	"uboot=u-boot.bin\0"			\
 	"load=tftp ${loadaddr} ${sbfhdr};"	\
-	"tftp " MK_STR(CONFIG_SYS_LOAD_ADDR2) " ${uboot} \0"	\
+	"tftp " __stringify(CONFIG_SYS_LOAD_ADDR2) " ${uboot} \0"	\
 	"upd=run load; run prog\0"		\
-	"prog=sf probe 0:1 10000 1;"		\
+	"prog=sf probe 0:1 1000000 3;"		\
 	"sf erase 0 30000;"			\
 	"sf write ${loadaddr} 0 30000;"		\
 	"save\0"				\
@@ -136,13 +96,13 @@
 #define CONFIG_SYS_UBOOT_END	0x3FFFF
 #define CONFIG_EXTRA_ENV_SETTINGS		\
 	"netdev=eth0\0"				\
-	"inpclk=" MK_STR(CONFIG_SYS_INPUT_CLKSRC) "\0"	\
+	"inpclk=" __stringify(CONFIG_SYS_INPUT_CLKSRC) "\0"	\
 	"loadaddr=40010000\0"			\
 	"u-boot=u-boot.bin\0"			\
 	"load=tftp ${loadaddr) ${u-boot}\0"	\
 	"upd=run load; run prog\0"		\
-	"prog=prot off 0 " MK_STR(CONFIG_SYS_UBOOT_END)	\
-	"; era 0 " MK_STR(CONFIG_SYS_UBOOT_END) " ;"	\
+	"prog=prot off 0 " __stringify(CONFIG_SYS_UBOOT_END)	\
+	"; era 0 " __stringify(CONFIG_SYS_UBOOT_END) " ;"	\
 	"cp.b ${loadaddr} 0 ${filesize};"	\
 	"save\0"				\
 	""
@@ -158,12 +118,11 @@
 #undef CONFIG_MCFPIT
 
 /* I2c */
-#define CONFIG_FSL_I2C
-#define CONFIG_HARD_I2C		/* I2C with hardware support */
-#undef	CONFIG_SOFT_I2C		/* I2C bit-banged               */
-#define CONFIG_SYS_I2C_SPEED		80000	/* I2C speed and slave address  */
-#define CONFIG_SYS_I2C_SLAVE		0x7F
-#define CONFIG_SYS_I2C_OFFSET		0x58000
+#define CONFIG_SYS_I2C
+#define CONFIG_SYS_I2C_FSL
+#define CONFIG_SYS_FSL_I2C_SPEED	80000
+#define CONFIG_SYS_FSL_I2C_SLAVE	0x7F
+#define CONFIG_SYS_FSL_I2C_OFFSET	0x58000
 #define CONFIG_SYS_IMMR			CONFIG_SYS_MBAR
 
 /* DSPI and Serial Flash */
@@ -173,8 +132,6 @@
 #define CONFIG_HARD_SPI
 #define CONFIG_SYS_SBFHDR_SIZE		0x7
 #ifdef CONFIG_CMD_SPI
-#	define CONFIG_SPI_FLASH
-#	define CONFIG_SPI_FLASH_STMICRO
 
 #	define CONFIG_SYS_DSPI_CTAR0	(DSPI_CTAR_TRSZ(7) | \
 					 DSPI_CTAR_PCSSCK_1CLK | \
@@ -192,7 +149,6 @@
 
 #define CONFIG_PRAM			2048	/* 2048 KB */
 
-#define CONFIG_SYS_PROMPT		"-> "
 #define CONFIG_SYS_LONGHELP		/* undef to save memory */
 
 #if defined(CONFIG_CMD_KGDB)
@@ -206,8 +162,6 @@
 
 #define CONFIG_SYS_LOAD_ADDR		(CONFIG_SYS_SDRAM_BASE + 0x10000)
 
-#define CONFIG_SYS_HZ			1000
-
 #define CONFIG_SYS_MBAR			0xFC000000
 
 /*
@@ -220,12 +174,11 @@
  * Definitions for initial stack pointer and data area (in DPRAM)
  */
 #define CONFIG_SYS_INIT_RAM_ADDR	0x80000000
-#define CONFIG_SYS_INIT_RAM_END	0x8000	/* End of used area in internal SRAM */
+#define CONFIG_SYS_INIT_RAM_SIZE	0x8000	/* Size of used area in internal SRAM */
 #define CONFIG_SYS_INIT_RAM_CTRL	0x221
-#define CONFIG_SYS_GBL_DATA_SIZE	256	/* size in bytes reserved for initial data */
-#define CONFIG_SYS_GBL_DATA_OFFSET	((CONFIG_SYS_INIT_RAM_END - CONFIG_SYS_GBL_DATA_SIZE) - 32)
+#define CONFIG_SYS_GBL_DATA_OFFSET	((CONFIG_SYS_INIT_RAM_SIZE - GENERATED_GBL_DATA_SIZE) - 32)
 #define CONFIG_SYS_INIT_SP_OFFSET	CONFIG_SYS_GBL_DATA_OFFSET
-#define CONFIG_SYS_SBFHDR_DATA_OFFSET	(CONFIG_SYS_INIT_RAM_END - 32)
+#define CONFIG_SYS_SBFHDR_DATA_OFFSET	(CONFIG_SYS_INIT_RAM_SIZE - 32)
 
 /*-----------------------------------------------------------------------
  * Start addresses for the final memory configuration
@@ -245,14 +198,16 @@
 #define CONFIG_SYS_MEMTEST_END		((CONFIG_SYS_SDRAM_SIZE - 3) << 20)
 
 #ifdef CONFIG_CF_SBF
-#	define CONFIG_SYS_MONITOR_BASE	(TEXT_BASE + 0x400)
+#	define CONFIG_SERIAL_BOOT
+#	define CONFIG_SYS_MONITOR_BASE	(CONFIG_SYS_TEXT_BASE + 0x400)
 #else
 #	define CONFIG_SYS_MONITOR_BASE	(CONFIG_SYS_FLASH_BASE + 0x400)
 #endif
 #define CONFIG_SYS_BOOTPARAMS_LEN	64*1024
 #define CONFIG_SYS_MONITOR_LEN		(256 << 10)	/* Reserve 256 kB for Monitor */
-#define CONFIG_SYS_MALLOC_LEN		(128 << 10)	/* Reserve 128 kB for malloc() */
 
+/* Reserve 256 kB for malloc() */
+#define CONFIG_SYS_MALLOC_LEN		(256 << 10)
 /*
  * For booting Linux, the board info and command line data
  * have to be in the first 8 MB of memory, since this is
@@ -262,7 +217,8 @@
 #define CONFIG_SYS_BOOTMAPSZ		(CONFIG_SYS_SDRAM_BASE + (CONFIG_SYS_SDRAM_SIZE << 20))
 
 /* Configuration for environment
- * Environment is embedded in u-boot in the second sector of the flash
+ * Environment is not embedded in u-boot. First time runing may have env
+ * crc error warning if there is no correct environment on the flash.
  */
 #if defined(CONFIG_SYS_STMICRO_BOOT)
 #	define CONFIG_ENV_IS_IN_SPI_FLASH	1
@@ -272,9 +228,9 @@
 #	define CONFIG_ENV_SECT_SIZE	0x10000
 #else
 #	define CONFIG_ENV_IS_IN_FLASH	1
-#	define CONFIG_ENV_ADDR		(CONFIG_SYS_FLASH_BASE + 0x8000)
+#	define CONFIG_ENV_ADDR		(CONFIG_SYS_FLASH_BASE + 0x40000)
 #	define CONFIG_ENV_SIZE		0x2000
-#	define CONFIG_ENV_SECT_SIZE	0x8000
+#	define CONFIG_ENV_SECT_SIZE	0x20000
 #endif
 #undef CONFIG_ENV_OVERWRITE
 
@@ -308,6 +264,21 @@
 
 /* Cache Configuration */
 #define CONFIG_SYS_CACHELINE_SIZE		16
+
+#define ICACHE_STATUS			(CONFIG_SYS_INIT_RAM_ADDR + \
+					 CONFIG_SYS_INIT_RAM_SIZE - 8)
+#define DCACHE_STATUS			(CONFIG_SYS_INIT_RAM_ADDR + \
+					 CONFIG_SYS_INIT_RAM_SIZE - 4)
+#define CONFIG_SYS_ICACHE_INV		(CF_CACR_BCINVA + CF_CACR_ICINVA)
+#define CONFIG_SYS_DCACHE_INV		(CF_CACR_DCINVA)
+#define CONFIG_SYS_CACHE_ACR2		(CONFIG_SYS_SDRAM_BASE | \
+					 CF_ADDRMASK(CONFIG_SYS_SDRAM_SIZE) | \
+					 CF_ACR_EN | CF_ACR_SM_ALL)
+#define CONFIG_SYS_CACHE_ICACR		(CF_CACR_BEC | CF_CACR_IEC | \
+					 CF_CACR_ICINVA | CF_CACR_EUSP)
+#define CONFIG_SYS_CACHE_DCACR		((CONFIG_SYS_CACHE_ICACR | \
+					 CF_CACR_DEC | CF_CACR_DDCM_P | \
+					 CF_CACR_DCINVA) & ~CF_CACR_ICINVA)
 
 /*-----------------------------------------------------------------------
  * Memory bank definitions

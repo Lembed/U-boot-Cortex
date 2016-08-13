@@ -16,19 +16,8 @@
  *
  * ----------------------------------------------------------------------------
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * SPDX-License-Identifier:	GPL-2.0+
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  * ----------------------------------------------------------------------------
  *
  *  Overview:
@@ -38,14 +27,12 @@
  Modifications:
  ver. 1.0: Feb 2005, Vinod/Sudhakar
  -
- *
  */
 
 #include <common.h>
 #include <asm/io.h>
 #include <nand.h>
-#include <asm/arch/nand_defs.h>
-#include <asm/arch/emif_defs.h>
+#include <asm/ti-common/davinci_nand.h>
 
 /* Definitions for 4-bit hardware ECC */
 #define NAND_TIMEOUT			10240
@@ -57,8 +44,6 @@
 #define ECC_STATE_ERR_CORR_COMP_P	0x2
 #define ECC_STATE_ERR_CORR_COMP_N	0x3
 
-static emif_registers *const emif_regs = (void *) DAVINCI_ASYNC_EMIF_CNTRL_BASE;
-
 /*
  * Exploit the little endianness of the ARM to do multi-byte transfers
  * per device read. This can perform over twice as quickly as individual
@@ -69,7 +54,7 @@ static emif_registers *const emif_regs = (void *) DAVINCI_ASYNC_EMIF_CNTRL_BASE;
  */
 static void nand_davinci_read_buf(struct mtd_info *mtd, uint8_t *buf, int len)
 {
-	struct nand_chip *chip = mtd->priv;
+	struct nand_chip *chip = mtd_to_nand(mtd);
 	const u32 *nand = chip->IO_ADDR_R;
 
 	/* Make sure that buf is 32 bit aligned */
@@ -93,7 +78,7 @@ static void nand_davinci_read_buf(struct mtd_info *mtd, uint8_t *buf, int len)
 
 	/* copy aligned data */
 	while (len >= 4) {
-		*(u32 *)buf = readl(nand);
+		*(u32 *)buf = __raw_readl(nand);
 		buf += 4;
 		len -= 4;
 	}
@@ -114,7 +99,7 @@ static void nand_davinci_read_buf(struct mtd_info *mtd, uint8_t *buf, int len)
 static void nand_davinci_write_buf(struct mtd_info *mtd, const uint8_t *buf,
 				   int len)
 {
-	struct nand_chip *chip = mtd->priv;
+	struct nand_chip *chip = mtd_to_nand(mtd);
 	const u32 *nand = chip->IO_ADDR_W;
 
 	/* Make sure that buf is 32 bit aligned */
@@ -138,7 +123,7 @@ static void nand_davinci_write_buf(struct mtd_info *mtd, const uint8_t *buf,
 
 	/* copy aligned data */
 	while (len >= 4) {
-		writel(*(u32 *)buf, nand);
+		__raw_writel(*(u32 *)buf, nand);
 		buf += 4;
 		len -= 4;
 	}
@@ -156,17 +141,18 @@ static void nand_davinci_write_buf(struct mtd_info *mtd, const uint8_t *buf,
 	}
 }
 
-static void nand_davinci_hwcontrol(struct mtd_info *mtd, int cmd, unsigned int ctrl)
+static void nand_davinci_hwcontrol(struct mtd_info *mtd, int cmd,
+		unsigned int ctrl)
 {
-	struct		nand_chip *this = mtd->priv;
+	struct		nand_chip *this = mtd_to_nand(mtd);
 	u_int32_t	IO_ADDR_W = (u_int32_t)this->IO_ADDR_W;
 
 	if (ctrl & NAND_CTRL_CHANGE) {
 		IO_ADDR_W &= ~(MASK_ALE|MASK_CLE);
 
-		if ( ctrl & NAND_CLE )
+		if (ctrl & NAND_CLE)
 			IO_ADDR_W |= MASK_CLE;
-		if ( ctrl & NAND_ALE )
+		if (ctrl & NAND_ALE)
 			IO_ADDR_W |= MASK_ALE;
 		this->IO_ADDR_W = (void __iomem *) IO_ADDR_W;
 	}
@@ -177,33 +163,35 @@ static void nand_davinci_hwcontrol(struct mtd_info *mtd, int cmd, unsigned int c
 
 #ifdef CONFIG_SYS_NAND_HW_ECC
 
+static u_int32_t nand_davinci_readecc(struct mtd_info *mtd)
+{
+	u_int32_t	ecc = 0;
+
+	ecc = __raw_readl(&(davinci_emif_regs->nandfecc[
+				CONFIG_SYS_NAND_CS - 2]));
+
+	return ecc;
+}
+
 static void nand_davinci_enable_hwecc(struct mtd_info *mtd, int mode)
 {
 	u_int32_t	val;
 
-	(void)readl(&(emif_regs->NANDFECC[CONFIG_SYS_NAND_CS - 2]));
+	/* reading the ECC result register resets the ECC calculation */
+	nand_davinci_readecc(mtd);
 
-	val = readl(&emif_regs->NANDFCR);
+	val = __raw_readl(&davinci_emif_regs->nandfcr);
 	val |= DAVINCI_NANDFCR_NAND_ENABLE(CONFIG_SYS_NAND_CS);
 	val |= DAVINCI_NANDFCR_1BIT_ECC_START(CONFIG_SYS_NAND_CS);
-	writel(val, &emif_regs->NANDFCR);
+	__raw_writel(val, &davinci_emif_regs->nandfcr);
 }
 
-static u_int32_t nand_davinci_readecc(struct mtd_info *mtd, u_int32_t region)
-{
-	u_int32_t	ecc = 0;
-
-	ecc = readl(&(emif_regs->NANDFECC[region - 1]));
-
-	return(ecc);
-}
-
-static int nand_davinci_calculate_ecc(struct mtd_info *mtd, const u_char *dat, u_char *ecc_code)
+static int nand_davinci_calculate_ecc(struct mtd_info *mtd, const u_char *dat,
+		u_char *ecc_code)
 {
 	u_int32_t		tmp;
-	const int region = 1;
 
-	tmp = nand_davinci_readecc(mtd, region);
+	tmp = nand_davinci_readecc(mtd);
 
 	/* Squeeze 4 bytes ECC into 3 bytes by removing RESERVED bits
 	 * and shifting. RESERVED bits are 31 to 28 and 15 to 12. */
@@ -232,9 +220,10 @@ static int nand_davinci_calculate_ecc(struct mtd_info *mtd, const u_char *dat, u
 	return 0;
 }
 
-static int nand_davinci_correct_data(struct mtd_info *mtd, u_char *dat, u_char *read_ecc, u_char *calc_ecc)
+static int nand_davinci_correct_data(struct mtd_info *mtd, u_char *dat,
+		u_char *read_ecc, u_char *calc_ecc)
 {
-	struct nand_chip *this = mtd->priv;
+	struct nand_chip *this = mtd_to_nand(mtd);
 	u_int32_t ecc_nand = read_ecc[0] | (read_ecc[1] << 8) |
 					  (read_ecc[2] << 16);
 	u_int32_t ecc_calc = calc_ecc[0] | (calc_ecc[1] << 8) |
@@ -254,7 +243,7 @@ static int nand_davinci_correct_data(struct mtd_info *mtd, u_char *dat, u_char *
 					 "%d\n", find_byte, find_bit);
 				return 1;
 			} else {
-				return -1;
+				return -EBADMSG;
 			}
 		} else if (!(diff & (diff - 1))) {
 			/* Single bit ECC error in the ECC itself,
@@ -265,10 +254,10 @@ static int nand_davinci_correct_data(struct mtd_info *mtd, u_char *dat, u_char *
 		} else {
 			/* Uncorrectable error */
 			MTDDEBUG(MTD_DEBUG_LEVEL0, "ECC UNCORRECTED_ERROR 1\n");
-			return -1;
+			return -EBADMSG;
 		}
 	}
-	return(0);
+	return 0;
 }
 #endif /* CONFIG_SYS_NAND_HW_ECC */
 
@@ -276,6 +265,17 @@ static int nand_davinci_correct_data(struct mtd_info *mtd, u_char *dat, u_char *
 static struct nand_ecclayout nand_davinci_4bit_layout_oobfirst = {
 #if defined(CONFIG_SYS_NAND_PAGE_2K)
 	.eccbytes = 40,
+#ifdef CONFIG_NAND_6BYTES_OOB_FREE_10BYTES_ECC
+	.eccpos = {
+		6,   7,  8,  9, 10,	11, 12, 13, 14, 15,
+		22, 23, 24, 25, 26,	27, 28, 29, 30, 31,
+		38, 39, 40, 41, 42,	43, 44, 45, 46, 47,
+		54, 55, 56, 57, 58,	59, 60, 61, 62, 63,
+	},
+	.oobfree = {
+		{2, 4}, {16, 6}, {32, 6}, {48, 6},
+	},
+#else
 	.eccpos = {
 		24, 25, 26, 27, 28,
 		29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
@@ -286,6 +286,7 @@ static struct nand_ecclayout nand_davinci_4bit_layout_oobfirst = {
 	.oobfree = {
 		{.offset = 2, .length = 22, },
 	},
+#endif	/* #ifdef CONFIG_NAND_6BYTES_OOB_FREE_10BYTES_ECC */
 #elif defined(CONFIG_SYS_NAND_PAGE_4K)
 	.eccbytes = 80,
 	.eccpos = {
@@ -304,6 +305,181 @@ static struct nand_ecclayout nand_davinci_4bit_layout_oobfirst = {
 #endif
 };
 
+#if defined CONFIG_KEYSTONE_RBL_NAND
+static struct nand_ecclayout nand_keystone_rbl_4bit_layout_oobfirst = {
+#if defined(CONFIG_SYS_NAND_PAGE_2K)
+	.eccbytes = 40,
+	.eccpos = {
+		6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+		22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+		38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+		54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+	},
+	.oobfree = {
+		{.offset = 2, .length = 4, },
+		{.offset = 16, .length = 6, },
+		{.offset = 32, .length = 6, },
+		{.offset = 48, .length = 6, },
+	},
+#elif defined(CONFIG_SYS_NAND_PAGE_4K)
+	.eccbytes = 80,
+	.eccpos = {
+		6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+		22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+		38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+		54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+		70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
+		86, 87, 88, 89, 90, 91, 92, 93, 94, 95,
+		102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+		118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+	},
+	.oobfree = {
+		{.offset = 2, .length = 4, },
+		{.offset = 16, .length = 6, },
+		{.offset = 32, .length = 6, },
+		{.offset = 48, .length = 6, },
+		{.offset = 64, .length = 6, },
+		{.offset = 80, .length = 6, },
+		{.offset = 96, .length = 6, },
+		{.offset = 112, .length = 6, },
+	},
+#endif
+};
+
+#ifdef CONFIG_SYS_NAND_PAGE_2K
+#define CONFIG_KEYSTONE_NAND_MAX_RBL_PAGE	CONFIG_KEYSTONE_NAND_MAX_RBL_SIZE >> 11
+#elif defined(CONFIG_SYS_NAND_PAGE_4K)
+#define CONFIG_KEYSTONE_NAND_MAX_RBL_PAGE	CONFIG_KEYSTONE_NAND_MAX_RBL_SIZE >> 12
+#endif
+
+/**
+ * nand_davinci_write_page - write one page
+ * @mtd: MTD device structure
+ * @chip: NAND chip descriptor
+ * @buf: the data to write
+ * @oob_required: must write chip->oob_poi to OOB
+ * @page: page number to write
+ * @cached: cached programming
+ * @raw: use _raw version of write_page
+ */
+static int nand_davinci_write_page(struct mtd_info *mtd, struct nand_chip *chip,
+				   uint32_t offset, int data_len,
+				   const uint8_t *buf, int oob_required,
+				   int page, int cached, int raw)
+{
+	int status;
+	int ret = 0;
+	struct nand_ecclayout *saved_ecc_layout;
+
+	/* save current ECC layout and assign Keystone RBL ECC layout */
+	if (page < CONFIG_KEYSTONE_NAND_MAX_RBL_PAGE) {
+		saved_ecc_layout = chip->ecc.layout;
+		chip->ecc.layout = &nand_keystone_rbl_4bit_layout_oobfirst;
+		mtd->oobavail = chip->ecc.layout->oobavail;
+	}
+
+	chip->cmdfunc(mtd, NAND_CMD_SEQIN, 0x00, page);
+
+	if (unlikely(raw)) {
+		status = chip->ecc.write_page_raw(mtd, chip, buf,
+						  oob_required, page);
+	} else {
+		status = chip->ecc.write_page(mtd, chip, buf,
+					      oob_required, page);
+	}
+
+	if (status < 0) {
+		ret = status;
+		goto err;
+	}
+
+	chip->cmdfunc(mtd, NAND_CMD_PAGEPROG, -1, -1);
+	status = chip->waitfunc(mtd, chip);
+
+	/*
+	 * See if operation failed and additional status checks are
+	 * available.
+	 */
+	if ((status & NAND_STATUS_FAIL) && (chip->errstat))
+		status = chip->errstat(mtd, chip, FL_WRITING, status, page);
+
+	if (status & NAND_STATUS_FAIL) {
+		ret = -EIO;
+		goto err;
+	}
+
+err:
+	/* restore ECC layout */
+	if (page < CONFIG_KEYSTONE_NAND_MAX_RBL_PAGE) {
+		chip->ecc.layout = saved_ecc_layout;
+		mtd->oobavail = saved_ecc_layout->oobavail;
+	}
+
+	return ret;
+}
+
+/**
+ * nand_davinci_read_page_hwecc - hardware ECC based page read function
+ * @mtd: mtd info structure
+ * @chip: nand chip info structure
+ * @buf: buffer to store read data
+ * @oob_required: caller requires OOB data read to chip->oob_poi
+ * @page: page number to read
+ *
+ * Not for syndrome calculating ECC controllers which need a special oob layout.
+ */
+static int nand_davinci_read_page_hwecc(struct mtd_info *mtd, struct nand_chip *chip,
+				uint8_t *buf, int oob_required, int page)
+{
+	int i, eccsize = chip->ecc.size;
+	int eccbytes = chip->ecc.bytes;
+	int eccsteps = chip->ecc.steps;
+	uint32_t *eccpos;
+	uint8_t *p = buf;
+	uint8_t *ecc_code = chip->buffers->ecccode;
+	uint8_t *ecc_calc = chip->buffers->ecccalc;
+	struct nand_ecclayout *saved_ecc_layout = chip->ecc.layout;
+
+	/* save current ECC layout and assign Keystone RBL ECC layout */
+	if (page < CONFIG_KEYSTONE_NAND_MAX_RBL_PAGE) {
+		chip->ecc.layout = &nand_keystone_rbl_4bit_layout_oobfirst;
+		mtd->oobavail = chip->ecc.layout->oobavail;
+	}
+
+	eccpos = chip->ecc.layout->eccpos;
+
+	/* Read the OOB area first */
+	chip->cmdfunc(mtd, NAND_CMD_READOOB, 0, page);
+	chip->read_buf(mtd, chip->oob_poi, mtd->oobsize);
+	chip->cmdfunc(mtd, NAND_CMD_READ0, 0, page);
+
+	for (i = 0; i < chip->ecc.total; i++)
+		ecc_code[i] = chip->oob_poi[eccpos[i]];
+
+	for (i = 0; eccsteps; eccsteps--, i += eccbytes, p += eccsize) {
+		int stat;
+
+		chip->ecc.hwctl(mtd, NAND_ECC_READ);
+		chip->read_buf(mtd, p, eccsize);
+		chip->ecc.calculate(mtd, p, &ecc_calc[i]);
+
+		stat = chip->ecc.correct(mtd, p, &ecc_code[i], NULL);
+		if (stat < 0)
+			mtd->ecc_stats.failed++;
+		else
+			mtd->ecc_stats.corrected += stat;
+	}
+
+	/* restore ECC layout */
+	if (page < CONFIG_KEYSTONE_NAND_MAX_RBL_PAGE) {
+		chip->ecc.layout = saved_ecc_layout;
+		mtd->oobavail = saved_ecc_layout->oobavail;
+	}
+
+	return 0;
+}
+#endif /* CONFIG_KEYSTONE_RBL_NAND */
+
 static void nand_davinci_4bit_enable_hwecc(struct mtd_info *mtd, int mode)
 {
 	u32 val;
@@ -315,15 +491,15 @@ static void nand_davinci_4bit_enable_hwecc(struct mtd_info *mtd, int mode)
 		 * Start a new ECC calculation for reading or writing 512 bytes
 		 * of data.
 		 */
-		val = readl(&emif_regs->NANDFCR);
+		val = __raw_readl(&davinci_emif_regs->nandfcr);
 		val &= ~DAVINCI_NANDFCR_4BIT_ECC_SEL_MASK;
 		val |= DAVINCI_NANDFCR_NAND_ENABLE(CONFIG_SYS_NAND_CS);
 		val |= DAVINCI_NANDFCR_4BIT_ECC_SEL(CONFIG_SYS_NAND_CS);
 		val |= DAVINCI_NANDFCR_4BIT_ECC_START;
-		writel(val, &emif_regs->NANDFCR);
+		__raw_writel(val, &davinci_emif_regs->nandfcr);
 		break;
 	case NAND_ECC_READSYN:
-		val = emif_regs->NAND4BITECC1;
+		val = __raw_readl(&davinci_emif_regs->nand4bitecc[0]);
 		break;
 	default:
 		break;
@@ -332,10 +508,12 @@ static void nand_davinci_4bit_enable_hwecc(struct mtd_info *mtd, int mode)
 
 static u32 nand_davinci_4bit_readecc(struct mtd_info *mtd, unsigned int ecc[4])
 {
-	ecc[0] = emif_regs->NAND4BITECC1 & NAND_4BITECC_MASK;
-	ecc[1] = emif_regs->NAND4BITECC2 & NAND_4BITECC_MASK;
-	ecc[2] = emif_regs->NAND4BITECC3 & NAND_4BITECC_MASK;
-	ecc[3] = emif_regs->NAND4BITECC4 & NAND_4BITECC_MASK;
+	int i;
+
+	for (i = 0; i < 4; i++) {
+		ecc[i] = __raw_readl(&davinci_emif_regs->nand4bitecc[i]) &
+			NAND_4BITECC_MASK;
+	}
 
 	return 0;
 }
@@ -418,32 +596,36 @@ static int nand_davinci_4bit_correct_data(struct mtd_info *mtd, uint8_t *dat,
 	 */
 
 	/*Take 2 bits from 8th byte and 8 bits from 9th byte */
-	writel(((ecc16[4]) >> 6) & 0x3FF, &emif_regs->NAND4BITECCLOAD);
+	__raw_writel(((ecc16[4]) >> 6) & 0x3FF,
+			&davinci_emif_regs->nand4biteccload);
 
 	/* Take 4 bits from 7th byte and 6 bits from 8th byte */
-	writel((((ecc16[3]) >> 12) & 0xF) | ((((ecc16[4])) << 4) & 0x3F0),
-	       &emif_regs->NAND4BITECCLOAD);
+	__raw_writel((((ecc16[3]) >> 12) & 0xF) | ((((ecc16[4])) << 4) & 0x3F0),
+			&davinci_emif_regs->nand4biteccload);
 
 	/* Take 6 bits from 6th byte and 4 bits from 7th byte */
-	writel((ecc16[3] >> 2) & 0x3FF, &emif_regs->NAND4BITECCLOAD);
+	__raw_writel((ecc16[3] >> 2) & 0x3FF,
+			&davinci_emif_regs->nand4biteccload);
 
 	/* Take 8 bits from 5th byte and 2 bits from 6th byte */
-	writel(((ecc16[2]) >> 8) | ((((ecc16[3])) << 8) & 0x300),
-	       &emif_regs->NAND4BITECCLOAD);
+	__raw_writel(((ecc16[2]) >> 8) | ((((ecc16[3])) << 8) & 0x300),
+			&davinci_emif_regs->nand4biteccload);
 
 	/*Take 2 bits from 3rd byte and 8 bits from 4th byte */
-	writel((((ecc16[1]) >> 14) & 0x3) | ((((ecc16[2])) << 2) & 0x3FC),
-	       &emif_regs->NAND4BITECCLOAD);
+	__raw_writel((((ecc16[1]) >> 14) & 0x3) | ((((ecc16[2])) << 2) & 0x3FC),
+			&davinci_emif_regs->nand4biteccload);
 
 	/* Take 4 bits form 2nd bytes and 6 bits from 3rd bytes */
-	writel(((ecc16[1]) >> 4) & 0x3FF, &emif_regs->NAND4BITECCLOAD);
+	__raw_writel(((ecc16[1]) >> 4) & 0x3FF,
+			&davinci_emif_regs->nand4biteccload);
 
 	/* Take 6 bits from 1st byte and 4 bits from 2nd byte */
-	writel((((ecc16[0]) >> 10) & 0x3F) | (((ecc16[1]) << 6) & 0x3C0),
-	       &emif_regs->NAND4BITECCLOAD);
+	__raw_writel((((ecc16[0]) >> 10) & 0x3F) | (((ecc16[1]) << 6) & 0x3C0),
+			&davinci_emif_regs->nand4biteccload);
 
 	/* Take 10 bits from 0th and 1st bytes */
-	writel((ecc16[0]) & 0x3FF, &emif_regs->NAND4BITECCLOAD);
+	__raw_writel((ecc16[0]) & 0x3FF,
+			&davinci_emif_regs->nand4biteccload);
 
 	/*
 	 * Perform a dummy read to the EMIF Revision Code and Status register.
@@ -451,7 +633,7 @@ static int nand_davinci_4bit_correct_data(struct mtd_info *mtd, uint8_t *dat,
 	 * writing the ECC values in previous step.
 	 */
 
-	val = emif_regs->NANDFSR;
+	val = __raw_readl(&davinci_emif_regs->nandfsr);
 
 	/*
 	 * Read the syndrome from the NAND Flash 4-Bit ECC 1-4 registers.
@@ -467,26 +649,40 @@ static int nand_davinci_4bit_correct_data(struct mtd_info *mtd, uint8_t *dat,
 	 * Clear any previous address calculation by doing a dummy read of an
 	 * error address register.
 	 */
-	val = emif_regs->NANDERRADD1;
+	val = __raw_readl(&davinci_emif_regs->nanderradd1);
 
 	/*
 	 * Set the addr_calc_st bit(bit no 13) in the NAND Flash Control
 	 * register to 1.
 	 */
-	emif_regs->NANDFCR |= 1 << 13;
+	__raw_writel(DAVINCI_NANDFCR_4BIT_CALC_START,
+			&davinci_emif_regs->nandfcr);
 
 	/*
-	 * Wait for the corr_state field (bits 8 to 11)in the
+	 * Wait for the corr_state field (bits 8 to 11) in the
+	 * NAND Flash Status register to be not equal to 0x0, 0x1, 0x2, or 0x3.
+	 * Otherwise ECC calculation has not even begun and the next loop might
+	 * fail because of a false positive!
+	 */
+	i = NAND_TIMEOUT;
+	do {
+		val = __raw_readl(&davinci_emif_regs->nandfsr);
+		val &= 0xc00;
+		i--;
+	} while ((i > 0) && !val);
+
+	/*
+	 * Wait for the corr_state field (bits 8 to 11) in the
 	 * NAND Flash Status register to be equal to 0x0, 0x1, 0x2, or 0x3.
 	 */
 	i = NAND_TIMEOUT;
 	do {
-		val = emif_regs->NANDFSR;
+		val = __raw_readl(&davinci_emif_regs->nandfsr);
 		val &= 0xc00;
 		i--;
 	} while ((i > 0) && val);
 
-	iserror = emif_regs->NANDFSR;
+	iserror = __raw_readl(&davinci_emif_regs->nandfsr);
 	iserror &= EMIF_NANDFSR_ECC_STATE_MASK;
 	iserror = iserror >> 8;
 
@@ -501,32 +697,33 @@ static int nand_davinci_4bit_correct_data(struct mtd_info *mtd, uint8_t *dat,
 	 */
 
 	if (iserror == ECC_STATE_NO_ERR) {
-		val = emif_regs->NANDERRVAL1;
+		val = __raw_readl(&davinci_emif_regs->nanderrval1);
 		return 0;
 	} else if (iserror == ECC_STATE_TOO_MANY_ERRS) {
-		val = emif_regs->NANDERRVAL1;
-		return -1;
+		val = __raw_readl(&davinci_emif_regs->nanderrval1);
+		return -EBADMSG;
 	}
 
-	numerrors = ((emif_regs->NANDFSR >> 16) & 0x3) + 1;
+	numerrors = ((__raw_readl(&davinci_emif_regs->nandfsr) >> 16)
+			& 0x3) + 1;
 
 	/* Read the error address, error value and correct */
 	for (i = 0; i < numerrors; i++) {
 		if (i > 1) {
 			erroraddress =
-			    ((emif_regs->NANDERRADD2 >>
+			    ((__raw_readl(&davinci_emif_regs->nanderradd2) >>
 			      (16 * (i & 1))) & 0x3FF);
 			erroraddress = ((512 + 7) - erroraddress);
 			errorvalue =
-			    ((emif_regs->NANDERRVAL2 >>
+			    ((__raw_readl(&davinci_emif_regs->nanderrval2) >>
 			      (16 * (i & 1))) & 0xFF);
 		} else {
 			erroraddress =
-			    ((emif_regs->NANDERRADD1 >>
+			    ((__raw_readl(&davinci_emif_regs->nanderradd1) >>
 			      (16 * (i & 1))) & 0x3FF);
 			erroraddress = ((512 + 7) - erroraddress);
 			errorvalue =
-			    ((emif_regs->NANDERRVAL1 >>
+			    ((__raw_readl(&davinci_emif_regs->nanderrval1) >>
 			      (16 * (i & 1))) & 0xFF);
 		}
 		/* xor the corrupt data with error value */
@@ -540,7 +737,7 @@ static int nand_davinci_4bit_correct_data(struct mtd_info *mtd, uint8_t *dat,
 
 static int nand_davinci_dev_ready(struct mtd_info *mtd)
 {
-	return emif_regs->NANDFSR & 0x1;
+	return __raw_readl(&davinci_emif_regs->nandfsr) & 0x1;
 }
 
 static void nand_flash_init(void)
@@ -561,34 +758,52 @@ static void nand_flash_init(void)
 	 *                                                                  *
 	 *------------------------------------------------------------------*/
 	 acfg1 = 0
-		| (0 << 31 )	/* selectStrobe */
-		| (0 << 30 )	/* extWait */
-		| (1 << 26 )	/* writeSetup	10 ns */
-		| (3 << 20 )	/* writeStrobe	40 ns */
-		| (1 << 17 )	/* writeHold	10 ns */
-		| (1 << 13 )	/* readSetup	10 ns */
-		| (5 << 7 )	/* readStrobe	60 ns */
-		| (1 << 4 )	/* readHold	10 ns */
-		| (3 << 2 )	/* turnAround	?? ns */
-		| (0 << 0 )	/* asyncSize	8-bit bus */
+		| (0 << 31)	/* selectStrobe */
+		| (0 << 30)	/* extWait */
+		| (1 << 26)	/* writeSetup	10 ns */
+		| (3 << 20)	/* writeStrobe	40 ns */
+		| (1 << 17)	/* writeHold	10 ns */
+		| (1 << 13)	/* readSetup	10 ns */
+		| (5 << 7)	/* readStrobe	60 ns */
+		| (1 << 4)	/* readHold	10 ns */
+		| (3 << 2)	/* turnAround	?? ns */
+		| (0 << 0)	/* asyncSize	8-bit bus */
 		;
 
-	emif_regs->AB1CR = acfg1; /* CS2 */
+	__raw_writel(acfg1, &davinci_emif_regs->ab1cr); /* CS2 */
 
-	emif_regs->NANDFCR = 0x00000101; /* NAND flash on CS2 */
+	/* NAND flash on CS2 */
+	__raw_writel(0x00000101, &davinci_emif_regs->nandfcr);
 #endif
 }
 
 void davinci_nand_init(struct nand_chip *nand)
 {
+#if defined CONFIG_KEYSTONE_RBL_NAND
+	int i;
+	struct nand_ecclayout *layout;
+
+	layout = &nand_keystone_rbl_4bit_layout_oobfirst;
+	layout->oobavail = 0;
+	for (i = 0; layout->oobfree[i].length &&
+	     i < ARRAY_SIZE(layout->oobfree); i++)
+		layout->oobavail += layout->oobfree[i].length;
+
+	nand->write_page = nand_davinci_write_page;
+	nand->ecc.read_page = nand_davinci_read_page_hwecc;
+#endif
 	nand->chip_delay  = 0;
 #ifdef CONFIG_SYS_NAND_USE_FLASH_BBT
-	nand->options	  |= NAND_USE_FLASH_BBT;
+	nand->bbt_options	  |= NAND_BBT_USE_FLASH;
+#endif
+#ifdef CONFIG_SYS_NAND_NO_SUBPAGE_WRITE
+	nand->options	  |= NAND_NO_SUBPAGE_WRITE;
 #endif
 #ifdef CONFIG_SYS_NAND_HW_ECC
 	nand->ecc.mode = NAND_ECC_HW;
 	nand->ecc.size = 512;
 	nand->ecc.bytes = 3;
+	nand->ecc.strength = 1;
 	nand->ecc.calculate = nand_davinci_calculate_ecc;
 	nand->ecc.correct  = nand_davinci_correct_data;
 	nand->ecc.hwctl  = nand_davinci_enable_hwecc;
@@ -599,6 +814,7 @@ void davinci_nand_init(struct nand_chip *nand)
 	nand->ecc.mode = NAND_ECC_HW_OOB_FIRST;
 	nand->ecc.size = 512;
 	nand->ecc.bytes = 10;
+	nand->ecc.strength = 4;
 	nand->ecc.calculate = nand_davinci_4bit_calculate_ecc;
 	nand->ecc.correct = nand_davinci_4bit_correct_data;
 	nand->ecc.hwctl = nand_davinci_4bit_enable_hwecc;

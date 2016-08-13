@@ -1,5 +1,5 @@
 /*
- * U-boot - Configuration file for BF537 STAMP board
+ * U-Boot - Configuration file for BF537 STAMP board
  */
 
 #ifndef __CONFIG_BF537_STAMP_H__
@@ -7,13 +7,11 @@
 
 #include <asm/config-pre.h>
 
-
 /*
  * Processor Settings
  */
 #define CONFIG_BFIN_CPU             bf537-0.2
 #define CONFIG_BFIN_BOOT_MODE       BFIN_BOOT_BYPASS
-
 
 /*
  * Clock Settings
@@ -38,7 +36,6 @@
 /* Values can range from 1-15						*/
 #define CONFIG_SCLK_DIV			4
 
-
 /*
  * Memory Settings
  */
@@ -52,9 +49,8 @@
 #define CONFIG_EBIU_AMBCTL0_VAL	0x7BB07BB0
 #define CONFIG_EBIU_AMBCTL1_VAL	0xFFC27BB0
 
-#define CONFIG_SYS_MONITOR_LEN		(512 * 1024)
+#define CONFIG_SYS_MONITOR_LEN		(768 * 1024)
 #define CONFIG_SYS_MALLOC_LEN		(384 * 1024)
-
 
 /*
  * Network Settings
@@ -63,12 +59,8 @@
 #define ADI_CMDS_NETWORK	1
 #define CONFIG_BFIN_MAC
 #define CONFIG_NETCONSOLE	1
-#define CONFIG_NET_MULTI	1
 #endif
 #define CONFIG_HOSTNAME		bf537-stamp
-/* Uncomment next line to use fixed MAC address */
-/* #define CONFIG_ETHADDR	02:80:ad:20:31:e8 */
-
 
 /*
  * Flash Settings
@@ -81,19 +73,13 @@
 /* some have 67 sectors (M29W320DB), but newer have 71 (M29W320EB) */
 #define CONFIG_SYS_MAX_FLASH_SECT	71
 
-
 /*
  * SPI Settings
  */
 #define CONFIG_BFIN_SPI
 #define CONFIG_ENV_SPI_MAX_HZ	30000000
 #define CONFIG_SF_DEFAULT_SPEED	30000000
-#define CONFIG_SPI_FLASH
-#define CONFIG_SPI_FLASH_ATMEL
-#define CONFIG_SPI_FLASH_SPANSION
-#define CONFIG_SPI_FLASH_STMICRO
-#define CONFIG_SPI_FLASH_WINBOND
-
+#define CONFIG_SPI_FLASH_ALL
 
 /*
  * Env Storage Settings
@@ -122,42 +108,37 @@
  * it linked after the configuration sector.
  */
 # define LDS_BOARD_TEXT \
-	cpu/blackfin/traps.o		(.text .text.*); \
-	cpu/blackfin/interrupt.o	(.text .text.*); \
-	cpu/blackfin/serial.o		(.text .text.*); \
-	common/dlmalloc.o		(.text .text.*); \
-	lib_generic/crc32.o		(.text .text.*); \
+	arch/blackfin/lib/built-in.o (.text*); \
+	arch/blackfin/cpu/built-in.o (.text*); \
 	. = DEFINED(env_offset) ? env_offset : .; \
-	common/env_embedded.o		(.text .text.*);
+	common/env_embedded.o (.text*);
 #endif
-
 
 /*
  * I2C Settings
  */
-#define CONFIG_BFIN_TWI_I2C	1
-#define CONFIG_HARD_I2C		1
-#define CONFIG_SYS_I2C_SPEED	50000
-#define CONFIG_SYS_I2C_SLAVE	0
-
+#define CONFIG_SYS_I2C
+#define CONFIG_SYS_I2C_ADI
 
 /*
  * SPI_MMC Settings
  */
+#define CONFIG_MMC_SPI
+#ifdef CONFIG_MMC_SPI
 #define CONFIG_MMC
-#define CONFIG_SPI_MMC
-
+#define CONFIG_GENERIC_MMC
+#endif
 
 /*
  * NAND Settings
  */
 /* #define CONFIG_NAND_PLAT */
+#ifdef CONFIG_NAND_PLAT
 #define CONFIG_SYS_NAND_BASE		0x20212000
 #define CONFIG_SYS_MAX_NAND_DEVICE	1
 
 #define BFIN_NAND_CLE(chip) ((unsigned long)(chip)->IO_ADDR_W | (1 << 2))
 #define BFIN_NAND_ALE(chip) ((unsigned long)(chip)->IO_ADDR_W | (1 << 1))
-#define BFIN_NAND_READY     PF3
 #define BFIN_NAND_WRITE(addr, cmd) \
 	do { \
 		bfin_write8(addr, cmd); \
@@ -166,14 +147,8 @@
 
 #define NAND_PLAT_WRITE_CMD(chip, cmd) BFIN_NAND_WRITE(BFIN_NAND_CLE(chip), cmd)
 #define NAND_PLAT_WRITE_ADR(chip, cmd) BFIN_NAND_WRITE(BFIN_NAND_ALE(chip), cmd)
-#define NAND_PLAT_DEV_READY(chip)      (bfin_read_PORTFIO() & BFIN_NAND_READY)
-#define NAND_PLAT_INIT() \
-	do { \
-		bfin_write_PORTF_FER(bfin_read_PORTF_FER() & ~BFIN_NAND_READY); \
-		bfin_write_PORTFIO_DIR(bfin_read_PORTFIO_DIR() & ~BFIN_NAND_READY); \
-		bfin_write_PORTFIO_INEN(bfin_read_PORTFIO_INEN() | BFIN_NAND_READY); \
-	} while (0)
-
+#define NAND_PLAT_GPIO_DEV_READY       GPIO_PF3
+#endif /* CONFIG_NAND_PLAT */
 
 /*
  * CF-CARD IDE-HDD Support
@@ -260,7 +235,6 @@
 
 #endif
 
-
 /*
  * Misc Settings
  */
@@ -268,15 +242,24 @@
 #define CONFIG_RTC_BFIN
 #define CONFIG_UART_CONSOLE	0
 
-/* #define CONFIG_BF537_STAMP_LEDCMD	1 */
-
 /* Define if want to do post memory test */
 #undef CONFIG_POST
 #ifdef CONFIG_POST
-#define FLASH_START_POST_BLOCK	11	/* Should > = 11 */
-#define FLASH_END_POST_BLOCK	71	/* Should < = 71 */
+#define CONFIG_SYS_POST_HOTKEYS_GPIO	GPIO_PF5
+#define CONFIG_POST_BSPEC1_GPIO_LEDS \
+	GPIO_PF6, GPIO_PF7, GPIO_PF8, GPIO_PF9, GPIO_PF10, GPIO_PF11,
+#define CONFIG_POST_BSPEC2_GPIO_BUTTONS \
+	GPIO_PF5, GPIO_PF4, GPIO_PF3, GPIO_PF2,
+#define CONFIG_POST_BSPEC2_GPIO_NAMES \
+	10, 11, 12, 13,
+#define CONFIG_SYS_POST_FLASH_START	11
+#define CONFIG_SYS_POST_FLASH_END	71
 #endif
 
+/* These are for board tests */
+#if 0
+#define CONFIG_BOOTCOMMAND       "bootldr 0x203f0100"
+#endif
 
 /*
  * Pull in common ADI header for remaining command/environment setup

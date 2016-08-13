@@ -3,23 +3,7 @@
  *
  * (c) 2007 Pengutronix, Sascha Hauer <s.hauer@pengutronix.de>
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _SMC911X_H_
@@ -384,6 +368,7 @@ static inline void smc911x_reg_write(struct eth_device *dev,
 #define WUCSR_MPEN			0x00000002
 
 /* Chip ID values */
+#define CHIP_89218	0x218a
 #define CHIP_9115	0x115
 #define CHIP_9116	0x116
 #define CHIP_9117	0x117
@@ -402,6 +387,7 @@ struct chip_id {
 };
 
 static const struct chip_id chip_ids[] =  {
+	{ CHIP_89218, "LAN89218" },
 	{ CHIP_9115, "LAN9115" },
 	{ CHIP_9116, "LAN9116" },
 	{ CHIP_9117, "LAN9117" },
@@ -469,8 +455,11 @@ static void smc911x_reset(struct eth_device *dev)
 {
 	int timeout;
 
-	/* Take out of PM setting first */
-	if (smc911x_reg_read(dev, PMT_CTRL) & PMT_CTRL_READY) {
+	/*
+	 *  Take out of PM setting first
+	 *  Device is already wake up if PMT_CTRL_READY bit is set
+	 */
+	if ((smc911x_reg_read(dev, PMT_CTRL) & PMT_CTRL_READY) == 0) {
 		/* Write to the bytetest will take out of powerdown */
 		smc911x_reg_write(dev, BYTE_TEST, 0x0);
 
@@ -479,7 +468,7 @@ static void smc911x_reset(struct eth_device *dev)
 		while (timeout-- &&
 			!(smc911x_reg_read(dev, PMT_CTRL) & PMT_CTRL_READY))
 			udelay(10);
-		if (!timeout) {
+		if (timeout < 0) {
 			printf(DRIVERNAME
 				": timeout waiting for PM restore\n");
 			return;
@@ -495,7 +484,7 @@ static void smc911x_reset(struct eth_device *dev)
 	while (timeout-- && smc911x_reg_read(dev, E2P_CMD) & E2P_CMD_EPC_BUSY)
 		udelay(10);
 
-	if (!timeout) {
+	if (timeout < 0) {
 		printf(DRIVERNAME ": reset timeout\n");
 		return;
 	}

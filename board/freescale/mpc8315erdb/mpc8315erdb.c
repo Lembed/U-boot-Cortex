@@ -4,23 +4,7 @@
  * Author: Scott Wood <scottwood@freescale.com>
  *         Dave Liu <daveliu@freescale.com>
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS for A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -140,7 +124,6 @@ void pci_init_board(void)
 	volatile law83xx_t *pcie_law = sysconf->pcielaw;
 	struct pci_region *reg[] = { pci_regions };
 	struct pci_region *pcie_reg[] = { pcie_regions_0, pcie_regions_1, };
-	int warmboot;
 
 	/* Enable all 3 PCI_CLK_OUTPUTs. */
 	clk->occr |= 0xe0000000;
@@ -154,10 +137,7 @@ void pci_init_board(void)
 	pci_law[1].bar = CONFIG_SYS_PCI_IO_PHYS & LAWBAR_BAR;
 	pci_law[1].ar = LBLAWAR_EN | LBLAWAR_1MB;
 
-	warmboot = gd->bd->bi_bootflags & BOOTFLAG_WARM;
-	warmboot |= immr->pmc.pmccr1 & PMCCR1_POWER_OFF;
-
-	mpc83xx_pci_init(1, reg, warmboot);
+	mpc83xx_pci_init(1, reg);
 
 	/* Configure the clock for PCIE controller */
 	clrsetbits_be32(&clk->sccr, SCCR_PCIEXP1CM | SCCR_PCIEXP2CM,
@@ -175,7 +155,7 @@ void pci_init_board(void)
 	out_be32(&pcie_law[1].bar, CONFIG_SYS_PCIE2_BASE & LAWBAR_BAR);
 	out_be32(&pcie_law[1].ar, LBLAWAR_EN | LBLAWAR_512MB);
 
-	mpc83xx_pcie_init(2, pcie_reg, warmboot);
+	mpc83xx_pcie_init(2, pcie_reg);
 }
 
 #if defined(CONFIG_OF_BOARD_SETUP)
@@ -208,7 +188,7 @@ void fdt_tsec1_fixup(void *fdt, bd_t *bd)
 	do_fixup_by_path(fdt, path, "status", disabled, sizeof(disabled), 1);
 }
 
-void ft_board_setup(void *blob, bd_t *bd)
+int ft_board_setup(void *blob, bd_t *bd)
 {
 	ft_cpu_setup(blob, bd);
 #ifdef CONFIG_PCI
@@ -216,6 +196,8 @@ void ft_board_setup(void *blob, bd_t *bd)
 #endif
 	fdt_fixup_dr_usb(blob, bd);
 	fdt_tsec1_fixup(blob, bd);
+
+	return 0;
 }
 #endif
 

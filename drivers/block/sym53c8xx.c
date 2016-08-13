@@ -2,23 +2,7 @@
  * (C) Copyright 2001
  * Denis Peter, MPL AG Switzerland, d.peter@mpl.ch.
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  * partly derived from
  * linux/drivers/scsi/sym53c8xx.c
  *
@@ -49,7 +33,7 @@
 #define PRINTF(fmt,args...)
 #endif
 
-#if defined(CONFIG_CMD_SCSI) && defined(CONFIG_SCSI_SYM53C8XX)
+#if defined(CONFIG_SCSI) && defined(CONFIG_SCSI_SYM53C8XX)
 
 #undef SCSI_SINGLE_STEP
 /*
@@ -264,7 +248,7 @@ void scsi_print_error (ccb * pccb)
 
 /******************************************************************************
  * sets-up the SCSI controller
- * the base memory address is retrived via the pci_read_config_dword
+ * the base memory address is retrieved via the pci_read_config_dword
  */
 void scsi_low_level_init(int busdevfunc)
 {
@@ -453,11 +437,9 @@ void scsi_int_enable(void)
 
 void scsi_write_dsp(unsigned long start)
 {
-	unsigned long val;
 #ifdef SCSI_SINGLE_STEP
 	unsigned char t;
 #endif
-	val = start;
 	out32r(scsi_mem_addr + DSP,start);
 #ifdef SCSI_SINGLE_STEP
 	t=scsi_read_byte(DCNTL);
@@ -675,7 +657,7 @@ void scsi_issue(ccb *pccb)
 	/* struct pccb must be set-up correctly */
 	retrycnt=0;
 	PRINTF("ID %d issue cmd %02X\n",pccb->target,pccb->cmd[0]);
-	pccb->trans_bytes=0; /* no bytes transfered yet */
+	pccb->trans_bytes=0; /* no bytes transferred yet */
 	scsi_set_script(pccb); /* fill in SCRIPT		*/
 	scsi_int_mask=STO | UDC | MA; /* | CMP; / * Interrupts which are enabled */
 	script_int_mask=0xff; /* enable all Ints */
@@ -730,7 +712,7 @@ retry:
 				for(i=0;i<3;i++)
 					int_stat[i]=0; /* delete all int status */
 				retrycnt++;
-				PRINTF("ID: %X Phase Missmatch Retry %d Phase %02X transfered %lx\n",
+				PRINTF("ID: %X Phase Missmatch Retry %d Phase %02X transferred %lx\n",
 						pccb->target,retrycnt,scsi_read_byte(SBCL),pccb->trans_bytes);
 				scsi_write_dsp(phys_to_bus(&script_cmd[4])); /* start retry script */
 				goto retry;
@@ -766,9 +748,9 @@ int scsi_exec(ccb *pccb)
 retry:
 	scsi_issue(pccb);
 	if(pccb->contr_stat!=SIR_COMPLETE)
-		return FALSE;
+		return false;
 	if(pccb->status==S_GOOD)
-		return TRUE;
+		return true;
 	if(pccb->status==S_CHECK_COND) { /* check condition */
 		for(i=0;i<16;i++)
 			tmpcmd[i]=pccb->cmd[i];
@@ -799,12 +781,12 @@ retry:
 			case SENSE_NO_SENSE:
 			case SENSE_RECOVERED_ERROR:
 				/* seems to be ok */
-				return TRUE;
+				return true;
 				break;
 			case SENSE_NOT_READY:
 				if((pccb->sense_buf[12]!=0x04)||(pccb->sense_buf[13]!=0x01)) {
 					/* if device is not in process of becoming ready */
-					return FALSE;
+					return false;
 					break;
 				} /* else fall through */
 			case SENSE_UNIT_ATTENTION:
@@ -816,13 +798,13 @@ retry:
 					goto retry;
 				}
 				PRINTF("Target %d not ready, %d retried\n",pccb->target,retrycnt);
-				return FALSE;
+				return false;
 			default:
-				return FALSE;
+				return false;
 		}
 	}
 	PRINTF("Status = %X\n",pccb->status);
-	return FALSE;
+	return false;
 }
 
 

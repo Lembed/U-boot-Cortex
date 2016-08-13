@@ -1,6 +1,6 @@
 /*
  * Overview:
- *   Platform independend driver for NDFC (NanD Flash Controller)
+ *   Platform independent driver for NDFC (NanD Flash Controller)
  *   integrated into IBM/AMCC PPC4xx cores
  *
  * (C) Copyright 2006-2009
@@ -10,23 +10,7 @@
  *	Thomas Gleixner
  *	Copyright 2006 IBM
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -35,7 +19,14 @@
 #include <linux/mtd/nand_ecc.h>
 #include <asm/processor.h>
 #include <asm/io.h>
-#include <ppc4xx.h>
+#include <asm/ppc4xx.h>
+
+#ifndef CONFIG_SYS_NAND_BCR
+#define CONFIG_SYS_NAND_BCR 0x80002222
+#endif
+#ifndef CONFIG_SYS_NDFC_EBC0_CFG
+#define CONFIG_SYS_NDFC_EBC0_CFG 0xb8400000
+#endif
 
 /*
  * We need to store the info, which chip-select (CS) is used for the
@@ -46,7 +37,7 @@ static int ndfc_cs[NDFC_MAX_BANKS];
 
 static void ndfc_hwcontrol(struct mtd_info *mtd, int cmd, unsigned int ctrl)
 {
-	struct nand_chip *this = mtd->priv;
+	struct nand_chip *this = mtd_to_nand(mtd);
 	ulong base = (ulong) this->IO_ADDR_W & 0xffffff00;
 
 	if (cmd == NAND_CMD_NONE)
@@ -60,7 +51,7 @@ static void ndfc_hwcontrol(struct mtd_info *mtd, int cmd, unsigned int ctrl)
 
 static int ndfc_dev_ready(struct mtd_info *mtdinfo)
 {
-	struct nand_chip *this = mtdinfo->priv;
+	struct nand_chip *this = mtd_to_nand(mtdinfo);
 	ulong base = (ulong) this->IO_ADDR_W & 0xffffff00;
 
 	return (in_be32((u32 *)(base + NDFC_STAT)) & NDFC_STAT_IS_READY);
@@ -68,7 +59,7 @@ static int ndfc_dev_ready(struct mtd_info *mtdinfo)
 
 static void ndfc_enable_hwecc(struct mtd_info *mtdinfo, int mode)
 {
-	struct nand_chip *this = mtdinfo->priv;
+	struct nand_chip *this = mtd_to_nand(mtdinfo);
 	ulong base = (ulong) this->IO_ADDR_W & 0xffffff00;
 	u32 ccr;
 
@@ -80,7 +71,7 @@ static void ndfc_enable_hwecc(struct mtd_info *mtdinfo, int mode)
 static int ndfc_calculate_ecc(struct mtd_info *mtdinfo,
 			      const u_char *dat, u_char *ecc_code)
 {
-	struct nand_chip *this = mtdinfo->priv;
+	struct nand_chip *this = mtd_to_nand(mtdinfo);
 	ulong base = (ulong) this->IO_ADDR_W & 0xffffff00;
 	u32 ecc;
 	u8 *p = (u8 *)&ecc;
@@ -105,7 +96,7 @@ static int ndfc_calculate_ecc(struct mtd_info *mtdinfo,
  */
 static void ndfc_read_buf(struct mtd_info *mtdinfo, uint8_t *buf, int len)
 {
-	struct nand_chip *this = mtdinfo->priv;
+	struct nand_chip *this = mtd_to_nand(mtdinfo);
 	ulong base = (ulong) this->IO_ADDR_W & 0xffffff00;
 	uint32_t *p = (uint32_t *) buf;
 
@@ -113,14 +104,13 @@ static void ndfc_read_buf(struct mtd_info *mtdinfo, uint8_t *buf, int len)
 		*p++ = in_be32((u32 *)(base + NDFC_DATA));
 }
 
-#ifndef CONFIG_NAND_SPL
 /*
  * Don't use these speedup functions in NAND boot image, since the image
  * has to fit into 4kByte.
  */
 static void ndfc_write_buf(struct mtd_info *mtdinfo, const uint8_t *buf, int len)
 {
-	struct nand_chip *this = mtdinfo->priv;
+	struct nand_chip *this = mtd_to_nand(mtdinfo);
 	ulong base = (ulong) this->IO_ADDR_W & 0xffffff00;
 	uint32_t *p = (uint32_t *) buf;
 
@@ -128,23 +118,21 @@ static void ndfc_write_buf(struct mtd_info *mtdinfo, const uint8_t *buf, int len
 		out_be32((u32 *)(base + NDFC_DATA), *p++);
 }
 
-static int ndfc_verify_buf(struct mtd_info *mtdinfo, const uint8_t *buf, int len)
+/*
+ * Read a byte from the NDFC.
+ */
+static uint8_t ndfc_read_byte(struct mtd_info *mtd)
 {
-	struct nand_chip *this = mtdinfo->priv;
-	ulong base = (ulong) this->IO_ADDR_W & 0xffffff00;
-	uint32_t *p = (uint32_t *) buf;
 
-	for (; len > 0; len -= 4)
-		if (*p++ != in_be32((u32 *)(base + NDFC_DATA)))
-			return -1;
+	struct nand_chip *chip = mtd_to_nand(mtd);
 
-	return 0;
-}
-#endif /* #ifndef CONFIG_NAND_SPL */
-
-#ifndef CONFIG_SYS_NAND_BCR
-#define CONFIG_SYS_NAND_BCR 0x80002222
+#ifdef CONFIG_SYS_NAND_BUSWIDTH_16BIT
+	return (uint8_t) readw(chip->IO_ADDR_R);
+#else
+	return readb(chip->IO_ADDR_R);
 #endif
+
+}
 
 void board_nand_select_device(struct nand_chip *nand, int chip)
 {
@@ -196,20 +184,15 @@ int board_nand_init(struct nand_chip *nand)
 	nand->ecc.mode = NAND_ECC_HW;
 	nand->ecc.size = 256;
 	nand->ecc.bytes = 3;
+	nand->ecc.strength = 1;
 	nand->select_chip = ndfc_select_chip;
 
-#ifndef CONFIG_NAND_SPL
-	nand->write_buf  = ndfc_write_buf;
-	nand->verify_buf = ndfc_verify_buf;
-#else
-	/*
-	 * Setup EBC (CS0 only right now)
-	 */
-	mtebc(EBC0_CFG, 0xb8400000);
-
-	mtebc(PB0CR, CONFIG_SYS_EBC_PB0CR);
-	mtebc(PB0AP, CONFIG_SYS_EBC_PB0AP);
+#ifdef CONFIG_SYS_NAND_BUSWIDTH_16BIT
+	nand->options |= NAND_BUSWIDTH_16;
 #endif
+
+	nand->write_buf  = ndfc_write_buf;
+	nand->read_byte = ndfc_read_byte;
 
 	chip++;
 

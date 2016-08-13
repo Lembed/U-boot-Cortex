@@ -9,13 +9,15 @@
  * Based on smc91111_eeprom.c which:
  * Heavily borrowed from the following peoples GPL'ed software:
  *  - Wolfgang Denk, DENX Software Engineering, wd@denx.de
- *       Das U-boot
+ *       Das U-Boot
  *  - Ladislav Michl ladis@linux-mips.org
  *       A rejected patch on the U-Boot mailing list
  */
 
 #include <common.h>
+#include <console.h>
 #include <exports.h>
+#include <linux/ctype.h>
 #include "../drivers/net/smc911x.h"
 
 /**
@@ -128,7 +130,7 @@ static int write_eeprom_reg(struct eth_device *dev, u8 value, u8 reg)
  */
 static char *skip_space(char *buf)
 {
-	while (buf[0] == ' ' || buf[0] == '\t')
+	while (isblank(buf[0]))
 		++buf;
 	return buf;
 }
@@ -240,7 +242,7 @@ static void dump_eeprom(struct eth_device *dev)
 static int smc911x_init(struct eth_device *dev)
 {
 	/* See if there is anything there */
-	if (!smc911x_detect_chip(dev))
+	if (smc911x_detect_chip(dev))
 		return 1;
 
 	smc911x_reset(dev);
@@ -313,7 +315,7 @@ static char *getline(void)
 /**
  *	smc911x_eeprom - our application's main() function
  */
-int smc911x_eeprom(int argc, char *argv[])
+int smc911x_eeprom(int argc, char * const argv[])
 {
 	/* Avoid initializing on stack as gcc likes to call memset() */
 	struct eth_device dev;
@@ -357,7 +359,7 @@ int smc911x_eeprom(int argc, char *argv[])
 			continue;
 
 		/* Only accept 1 letter commands */
-		if (line[0] && line[1] && line[1] != ' ' && line[1] != '\t')
+		if (line[0] && line[1] && !isblank(line[1]))
 			goto unknown_cmd;
 
 		/* Now parse the command */
